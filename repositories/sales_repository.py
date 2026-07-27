@@ -146,7 +146,12 @@ def fetch_sales_history(search_term=None):
         SELECT
             s.id, s.sale_no, c.name, s.sale_date,
             s.gross_total, s.discount, s.discount_amount,
-            s.tax, s.tax_amount, s.net_total
+            s.tax, s.tax_amount, s.net_total,
+            COALESCE((
+                SELECT SUM(sr.quantity)
+                FROM sale_returns sr
+                WHERE sr.sale_id = s.id
+            ), 0) AS returned_qty
         FROM sales s
         INNER JOIN customers c ON s.customer_id = c.id
     """
@@ -197,6 +202,80 @@ def fetch_sale_items(sale_id):
         INNER JOIN products p ON si.product_id = p.id
         WHERE si.sale_id = ?
         ORDER BY si.id
+    """, (sale_id,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows
+# =====================================
+# Sale Returns
+# =====================================
+def fetch_sale_items_for_return(sale_id):
+    """
+    Returns each sold line for this sale along with how much of it
+    has already been returned before - so the UI can show/limit the
+    maximum quantity that can still be returned.
+    """
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            si.product_id,
+            p.name,
+            si.quantity,
+            COALESCE((
+                SELECT SUM(sr.quantity)
+                FROM sale_returns sr
+                WHERE sr.sale_id = si.sale_id
+                  AND sr.product_id = si.product_id
+            ), 0) AS already_returned
+        FROM sale_items si
+        INNER JOIN products p ON si.product_id = p.id
+        WHERE si.sale_id = ?
+        ORDER BY si.id
+    """, (sale_id,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows
+
+
+def insert_sale_return(cursor, sale_id, product_id, quantity, reason):
+
+    cursor.execute("""
+        INSERT INTO sale_returns(sale_id, product_id, quantity, reason)
+        VALUES (?, ?, ?, ?)
+    """, (sale_id, product_id, quantity, reason))
+
+    return cursor.lastrowid
+
+
+def increment_product_stock(cursor, product_id, quantity):
+    """Adds returned quantity back into stock."""
+
+    cursor.execute("""
+        UPDATE products
+        SET quantity = quantity + ?
+        WHERE id = ?
+    """, (quantity, product_id))
+
+
+def fetch_returns_for_sale(sale_id):
+    """Used to display return history for a specific sale."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT p.name, sr.quantity, sr.reason, sr.return_date
+        FROM sale_returns sr
+        INNER JOIN products p ON sr.product_id = p.id
+        WHERE sr.sale_id = ?
+        ORDER BY sr.id
     """, (sale_id,))
 
     rows = cursor.fetchall()

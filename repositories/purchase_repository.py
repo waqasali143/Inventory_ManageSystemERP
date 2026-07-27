@@ -231,7 +231,12 @@ def fetch_purchase_history(search_term=None):
             p.tax,
             p.tax_amount,
             p.net_total,
-            p.purchase_date
+            p.purchase_date,
+            COALESCE((
+                    SELECT SUM(pr.quantity)
+                    FROM purchase_returns pr
+                    WHERE pr.purchase_id = p.id
+            ), 0) AS returned_qty
         FROM purchases p
         INNER JOIN suppliers s
             ON p.supplier_id = s.id
@@ -329,3 +334,77 @@ def fetch_product_stock(product_name):
     if row:
         return row[0]
     return 0
+# =====================================
+# Purchase Returns
+# =====================================
+def fetch_purchase_items_for_return(purchase_id):
+    """
+    Returns each purchased line for this purchase along with how much
+    of it has already been returned before - so the UI can show/limit
+    the maximum quantity that can still be returned.
+    """
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            pi.product_id,
+            p.name,
+            pi.quantity,
+            COALESCE((
+                SELECT SUM(pr.quantity)
+                FROM purchase_returns pr
+                WHERE pr.purchase_id = pi.purchase_id
+                  AND pr.product_id = pi.product_id
+            ), 0) AS already_returned
+        FROM purchase_items pi
+        INNER JOIN products p ON pi.product_id = p.id
+        WHERE pi.purchase_id = ?
+        ORDER BY pi.id
+    """, (purchase_id,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows
+
+
+def insert_purchase_return(cursor, purchase_id, product_id, quantity, reason):
+
+    cursor.execute("""
+        INSERT INTO purchase_returns(purchase_id, product_id, quantity, reason)
+        VALUES (?, ?, ?, ?)
+    """, (purchase_id, product_id, quantity, reason))
+
+    return cursor.lastrowid
+
+
+def decrement_product_stock(cursor, product_id, quantity):
+    """Removes returned quantity from stock (going back to supplier)."""
+
+    cursor.execute("""
+        UPDATE products
+        SET quantity = quantity - ?
+        WHERE id = ?
+    """, (quantity, product_id))
+
+
+def fetch_returns_for_purchase(purchase_id):
+    """Used to display return history for a specific purchase."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT p.name, pr.quantity, pr.reason, pr.return_date
+        FROM purchase_returns pr
+        INNER JOIN products p ON pr.product_id = p.id
+        WHERE pr.purchase_id = ?
+        ORDER BY pr.id
+    """, (purchase_id,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows

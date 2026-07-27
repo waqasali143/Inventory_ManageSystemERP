@@ -1,28 +1,13 @@
 
 import sqlite3
-# from tkinter import ttk
-# from tkinter import messagebox
-# from tkinter import Toplevel
-# from tkinter import Frame, Scrollbar, RIGHT, Y, BOTH, CENTER, E, END
 
-# from tkinter import (
-#     Toplevel,
-#     LabelFrame,
-#     Label,
-#     Entry,
-#     Button,
-#     StringVar,
-#     messagebox
-# )
-
-# =====================================
-# Load Customers
-# =====================================
 from tkinter import messagebox
 from repositories import sales_repository as repo
 from database.database import get_connection
 from utils import event_bus
-
+# =====================================
+# Load Customers
+# =====================================
 
 def load_customers():
     return repo.fetch_active_customers()
@@ -206,7 +191,67 @@ def save_sale(customer, cart_tree, summary):
 
     finally:
         conn.close()
+# =====================================
+# Sale Returns
+# =====================================
+def get_sale_items_for_return(sale_id):
+    return repo.fetch_sale_items_for_return(sale_id)
 
+
+def get_returns_for_sale(sale_id):
+    return repo.fetch_returns_for_sale(sale_id)
+
+
+def validate_return(sale_id, product_id, return_qty, original_qty, already_returned):
+
+    if return_qty <= 0:
+        messagebox.showerror("Validation Error", "Return quantity must be greater than zero.")
+        return False
+
+    remaining = original_qty - already_returned
+
+    if return_qty > remaining:
+        messagebox.showerror(
+            "Validation Error",
+            f"Cannot return more than {remaining} unit(s) - "
+            f"{already_returned} already returned out of {original_qty} sold."
+        )
+        return False
+
+    return True
+
+# =====================================
+# Process Sale Return
+# (saves the return record, and adds the stock back)
+# =====================================
+def process_sale_return(sale_id, product_id, return_qty, reason,
+                         original_qty, already_returned):
+
+    if not validate_return(sale_id, product_id, return_qty, 
+                           original_qty, already_returned):
+        return False
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        repo.insert_sale_return(cursor, sale_id, product_id, return_qty, reason)
+        repo.increment_product_stock(cursor, product_id, return_qty)
+
+        conn.commit()
+
+        event_bus.publish()
+
+        messagebox.showinfo("Success", "Return processed and stock updated.")
+        return True
+
+    except Exception as e:
+        conn.rollback()
+        messagebox.showerror("Database Error", str(e))
+        return False
+
+    finally:
+        conn.close()
 # =====================================
 # Thin wrappers for history/details (so views never import
 # repositories directly)

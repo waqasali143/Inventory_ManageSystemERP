@@ -252,3 +252,64 @@ def save_purchase(supplier, invoice_no, purchase_date, cart_tree, summary):
 
     finally:
         conn.close()
+        
+# =====================================
+# Purchase Returns
+# =====================================
+def get_purchase_items_for_return(purchase_id):
+    return repo.fetch_purchase_items_for_return(purchase_id)
+
+
+def get_returns_for_purchase(purchase_id):
+    return repo.fetch_returns_for_purchase(purchase_id)
+
+
+def validate_purchase_return(product_id, return_qty, original_qty, already_returned):
+
+    if return_qty <= 0:
+        messagebox.showerror("Validation Error", "Return quantity must be greater than zero.")
+        return False
+
+    remaining = original_qty - already_returned
+
+    if return_qty > remaining:
+        messagebox.showerror(
+            "Validation Error",
+            f"Cannot return more than {remaining} unit(s) - "
+            f"{already_returned} already returned out of {original_qty} purchased."
+        )
+        return False
+
+    return True
+
+# =====================================
+# Process Purchase Return
+# (saves the return record, and removes the stock)
+# =====================================
+def process_purchase_return(purchase_id, product_id, return_qty, reason,
+                             original_qty, already_returned):
+
+    if not validate_purchase_return(product_id, return_qty, original_qty, already_returned):
+        return False
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        repo.insert_purchase_return(cursor, purchase_id, product_id, return_qty, reason)
+        repo.decrement_product_stock(cursor, product_id, return_qty)
+
+        conn.commit()
+
+        event_bus.publish()
+
+        messagebox.showinfo("Success", "Return processed and stock updated.")
+        return True
+
+    except Exception as e:
+        conn.rollback()
+        messagebox.showerror("Database Error", str(e))
+        return False
+
+    finally:
+        conn.close()

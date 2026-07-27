@@ -16,12 +16,13 @@ from utils.tree_helpers import build_treeview, reload_treeview
 from utils.ui_helpers import add_buttons, labeled_entry
 
 from services.purchase_summary import PurchaseSummary
-
+from utils.window_helpers import size_and_center
 from services.purchase_service import (
     
     calculate_purchase_totals, remove_cart_item, clear_cart, save_purchase, 
     load_suppliers, load_products, get_product_cost_price, 
-    get_product_stock, get_purchase_history, get_purchase_header, get_purchase_items
+    get_product_stock, get_purchase_history, get_purchase_header, get_purchase_items,
+    get_purchase_items_for_return, process_purchase_return
 )
 # =====================================
 # Product Selected
@@ -602,6 +603,7 @@ def purchase_window():
             ("Clear Cart", lambda: clear_cart(cart_tree, summary)),
             ("Save Purchase", handle_save_purchase),
             ("Purchase History", purchase_history),
+            ("Process Return", open_purchase_return_window),
         ])
 # ----------------------------------------------
 #  Supplier , Products load in combobox
@@ -689,7 +691,9 @@ def purchase_history():
     {"key": "tax_amount", "heading": "Tax Amount", "width": 100, "anchor": E},
     {"key": "net_total", "heading": "Net Total", "width": 120, "anchor": E},
     {"key": "date", "heading": "Date", "width": 170},
+    {"key": "returned_qty", "heading": "Returned", "width": 90, "anchor": CENTER},
     ]
+    
     history_tree = build_treeview(table_frame, HISTORY_COLUMNS)
     history_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
     scroll_y.config(command=history_tree.yview)
@@ -796,3 +800,111 @@ def show_purchase_details(event):
     ).grid(row=0, column=3, padx=20, pady=5, sticky="w")
 
     totals_frame.pack(fill="x", padx=10, pady=(0, 10))
+    
+# =====================================
+# Purchase Return Window
+# =====================================
+def open_purchase_return_window():
+
+    return_win = Toplevel()
+    return_win.title("Process Purchase Return")
+    size_and_center(return_win, width_ratio=0.6, height_ratio=0.6)
+
+    current_purchase_id = StringVar()
+
+    # ---------------- Search ----------------
+    search_frame = LabelFrame(return_win, text="Find Purchase", padx=10, pady=10)
+    search_frame.pack(fill="x", padx=10, pady=10)
+
+    Label(search_frame, text="Purchase No").grid(row=0, column=0, padx=5)
+    purchase_no_search = StringVar()
+    Entry(search_frame, textvariable=purchase_no_search, width=25).grid(row=0, column=1, padx=5)
+
+    Button(
+        search_frame, text="Load Items", width=14,
+        command=lambda: load_items_for_return()
+    ).grid(row=0, column=2, padx=10)
+
+    # ---------------- Return Form (kept BEFORE the expanding---------
+    # items table, so it never gets squeezed off-screen) ----------------
+    form_frame = LabelFrame(return_win, text="Return Details", padx=10, pady=10)
+    form_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+    Label(form_frame, text="Return Qty").grid(row=0, column=0, padx=5, pady=5)
+    return_qty = IntVar(value=1)
+    Entry(form_frame, textvariable=return_qty, width=10).grid(row=0, column=1, padx=5, pady=5)
+
+    Label(form_frame, text="Reason").grid(row=0, column=2, padx=5, pady=5)
+    reason = StringVar()
+    Entry(form_frame, textvariable=reason, width=30).grid(row=0, column=3, padx=5, pady=5)
+
+    def handle_process_return():
+
+        selected = items_tree.focus()
+        if not selected:
+            messagebox.showerror("Error", "Please select a product from the list.")
+            return
+
+        values = items_tree.item(selected, "values")
+        product_id = int(values[0])
+        purchased_qty = int(values[2])
+        already_returned = int(values[3])
+
+        success = process_purchase_return(
+            current_purchase_id.get(), product_id, return_qty.get(),
+            reason.get().strip(), purchased_qty, already_returned
+        )
+
+        if success:
+            load_items_for_return()
+            return_qty.set(1)
+            reason.set("")
+
+    Button(
+        form_frame, text="Process Return", width=16,
+        command=handle_process_return
+    ).grid(row=0, column=4, padx=10, pady=5)
+
+    # ---------------- Items Table ----------------
+    items_frame = LabelFrame(return_win, text="Purchased Items", padx=10, pady=10)
+    items_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+    items_tree = ttk.Treeview(
+        items_frame,
+        columns=("product_id", "product", "purchased_qty", "already_returned", "remaining"),
+        show="headings"
+    )
+    items_tree.heading("product", text="Product")
+    items_tree.heading("purchased_qty", text="Purchased Qty")
+    items_tree.heading("already_returned", text="Already Returned")
+    items_tree.heading("remaining", text="Remaining")
+    items_tree.column("product", width=250)
+    items_tree.column("purchased_qty", width=110, anchor=CENTER)
+    items_tree.column("already_returned", width=130, anchor=CENTER)
+    items_tree.column("remaining", width=100, anchor=CENTER)
+    items_tree["displaycolumns"] = ("product", "purchased_qty", "already_returned", "remaining")
+    items_tree.pack(fill=BOTH, expand=True)
+
+    def load_items_for_return():
+
+        for row in items_tree.get_children():
+            items_tree.delete(row)
+
+        purchase_no = purchase_no_search.get().strip()
+        if purchase_no == "":
+            messagebox.showerror("Error", "Please enter a Purchase No.")
+            return
+
+        matches = get_purchase_history(purchase_no)
+        if not matches:
+            messagebox.showerror("Error", "No purchase found with that Purchase No.")
+            return
+
+        purchase_id = matches[0][0]
+        current_purchase_id.set(purchase_id)
+
+        for product_id, product_name, purchased_qty, already_returned in get_purchase_items_for_return(purchase_id):
+            remaining = purchased_qty - already_returned
+            items_tree.insert("", "end", values=(
+                product_id, product_name, purchased_qty, already_returned, remaining
+            ))

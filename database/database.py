@@ -1,3 +1,4 @@
+
 import sqlite3
 # =====================================
 # Database Connection
@@ -219,6 +220,24 @@ def connect():
         )
         """)
 # =============================================================
+# ------------  Purchase Returns Table  ---------------------------
+# ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS purchase_returns
+        (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            purchase_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            quantity INTEGER NOT NULL,
+            reason TEXT DEFAULT '',
+            return_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (purchase_id)
+            REFERENCES purchases(id),
+            FOREIGN KEY (product_id)
+            REFERENCES products(id)
+        )
+    """)
+# =============================================================
 # ------------  Sales Table  ---------------------------
 # ============================================================
     cursor.execute("""
@@ -246,6 +265,24 @@ def connect():
 
             FOREIGN KEY (customer_id)
             REFERENCES customers(id)
+        )
+    """)
+# =============================================================
+# ------------  Sale Returns Table  ---------------------------
+# ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sale_returns
+        (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            quantity INTEGER NOT NULL,
+            reason TEXT DEFAULT '',
+            return_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (sale_id)
+            REFERENCES sales(id),
+            FOREIGN KEY (product_id)
+            REFERENCES products(id)
         )
     """)
 # =====================================

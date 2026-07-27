@@ -8,7 +8,8 @@ from services.sales_service import (
     load_customers, load_products, get_product_details,
     validate_sale_line, calculate_sale_totals,
     remove_cart_item, clear_cart, clear_sale_form,
-    save_sale, get_sales_history, get_sale_header, get_sale_items
+    save_sale, get_sales_history, get_sale_header, get_sale_items,
+    get_sale_items_for_return, get_returns_for_sale, process_sale_return
 )
 from utils.window_helpers import size_and_center
 # =====================================
@@ -89,7 +90,7 @@ def sales_window():
     # Discount %
     # -------------------------------------
     Label(totals_frame, text="Discount %").grid(row=0, column=2, padx=5, pady=5)
-    discount_entry = Entry(totals_frame, textvariable=summary.discount, width=10, justify="right")
+    discount_entry = Entry(totals_frame, textvariable=summary.discount, width=12, justify="right")
     discount_entry.grid(row=0, column=3, padx=5, pady=5)
     discount_entry.bind("<KeyRelease>", lambda event: refresh_totals())
 
@@ -107,7 +108,7 @@ def sales_window():
     # Tax %
     # ---------------------------------
     Label(totals_frame, text="Tax %").grid(row=1, column=0, padx=5, pady=5)
-    tax_entry = Entry(totals_frame, textvariable=summary.tax, width=10, justify="right")
+    tax_entry = Entry(totals_frame, textvariable=summary.tax, width=12, justify="right")
     tax_entry.grid(row=1, column=1, padx=5, pady=5)
     tax_entry.bind("<KeyRelease>", lambda event: refresh_totals())
 
@@ -449,60 +450,36 @@ def sales_window():
 #   Buttons
 # ==========================
     Button(
-        toolbar,
-        text="New Sale",
-        width=15,
+        toolbar, text="New Sale", width=15,
         command=lambda: clear_sale_form(
-            customer, product, quantity, sale_price, 
-            available_stock, cart_tree, summary
+            customer, product, quantity, sale_price, available_stock, cart_tree, summary
         )
-    ).pack(
-        side=LEFT,
-        padx=5,
-        pady=5
-    )
-    Button(
-            toolbar,
-            text="Add To Cart",
-            width=15,
-            command=add_to_cart
-        ).pack(
-            side=LEFT,
-            padx=5,
-            pady=5
-        )
-    Button(
-            toolbar,
-            text="Remove Item",
-            width=15,
-            command=lambda: remove_cart_item(cart_tree, summary)
-        ).pack(
-            side=LEFT,
-            padx=5,
-            pady=5
-        )
+    ).pack(side=LEFT, padx=5, pady=5)
 
     Button(
-        toolbar,
-        text="Save Sale",
-        width=15,
+        toolbar, text="Add To Cart", width=15,
+        command=add_to_cart
+    ).pack(side=LEFT, padx=5, pady=5)
+
+    Button(
+        toolbar, text="Remove Item", width=15,
+        command=lambda: remove_cart_item(cart_tree, summary)
+    ).pack(side=LEFT, padx=5, pady=5)
+
+    Button(
+        toolbar, text="Save Sale", width=15,
         command=handle_save
-    ).pack(
-        side=LEFT,
-        padx=5,
-        pady=5
-    )
-    Button(
-        toolbar,
-        text="Sales History",
-        width=15,
-        command=sales_history
-    ).pack(
-        side=LEFT,
-        padx=5,
-        pady=5
-    )
+    ).pack(side=LEFT, padx=5, pady=5)
 
+    Button(
+        toolbar, text="Sales History", width=15,
+        command=sales_history
+    ).pack(side=LEFT, padx=5, pady=5)
+
+    Button(
+        toolbar, text="Process Return", width=15,
+        command=open_return_window
+    ).pack(side=LEFT, padx=5, pady=5)
 # =====================================
 # Sales History Window
 # =====================================
@@ -510,8 +487,7 @@ def sales_history():
 
     history_win = Toplevel()
     history_win.title("Sales History")
-    size_and_center(history_win, width_ratio=0.75, height_ratio=0.7)
-
+    size_and_center(history_win, width_ratio=0.9, height_ratio=0.75)
     search_frame = LabelFrame(history_win, text="Search Sale", padx=10, pady=10)
     search_frame.pack(fill="x", padx=10, pady=10)
 
@@ -549,7 +525,7 @@ def sales_history():
         columns=(
             "id", "sale_no", "customer", "date",
             "gross_total", "discount", "discount_amount",
-            "tax", "tax_amount", "net_total"
+            "tax", "tax_amount", "net_total", "returned_qty"
         ),
         yscrollcommand=scroll_y.set
     )
@@ -565,6 +541,8 @@ def sales_history():
     history_tree.heading("tax", text="Tax %")
     history_tree.heading("tax_amount", text="Tax Amt")
     history_tree.heading("net_total", text="Net Total")
+    history_tree.heading("returned_qty", text="Returned")
+
 
     history_tree.column("id", width=50, anchor=CENTER)
     history_tree.column("sale_no", width=110)
@@ -576,6 +554,8 @@ def sales_history():
     history_tree.column("tax", width=80, anchor=E)
     history_tree.column("tax_amount", width=90, anchor=E)
     history_tree.column("net_total", width=100, anchor=E)
+    history_tree.column("returned_qty", width=90, anchor=CENTER)
+
 
     history_tree["show"] = "headings"
     history_tree.pack(fill=BOTH, expand=True)
@@ -658,4 +638,114 @@ def show_sale_details(sale_id):
         row=0, column=2, padx=15, pady=5, sticky="w")
     Label(totals_frame, text=f"Net Total : {net_total:,.2f}", font=("Arial", 11, "bold")).grid(
         row=0, column=3, padx=15, pady=5, sticky="w")
-    # win.grab_set()
+
+# =====================================
+# Sale Return Window
+# =====================================
+def open_return_window():
+
+    return_win = Toplevel()
+    return_win.title("Process Sale Return")
+    size_and_center(return_win, width_ratio=0.6, height_ratio=0.6)
+
+    current_sale_id = StringVar()
+
+    # ---------------- Search ----------------
+    search_frame = LabelFrame(return_win, text="Find Sale", padx=10, pady=10)
+    search_frame.pack(fill="x", padx=10, pady=10)
+
+    Label(search_frame, text="Sale No").grid(row=0, column=0, padx=5)
+    sale_no_search = StringVar()
+    Entry(search_frame, textvariable=sale_no_search, width=25).grid(row=0, column=1, padx=5)
+
+    Button(
+        search_frame, text="Load Items", width=14,
+        command=lambda: load_items_for_return()
+    ).grid(row=0, column=2, padx=10)
+#===================================================================
+# ---------------- Return Form ----------------
+# =====================================================================
+    form_frame = LabelFrame(return_win, text="Return Details", padx=10, pady=10)
+    form_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+    Label(form_frame, text="Return Qty").grid(row=0, column=0, padx=5, pady=5)
+    return_qty = IntVar(value=1)
+    Entry(form_frame, textvariable=return_qty, width=10).grid(row=0, column=1, padx=5, pady=5)
+
+    Label(form_frame, text="Reason").grid(row=0, column=2, padx=5, pady=5)
+    reason = StringVar()
+    Entry(form_frame, textvariable=reason, width=30).grid(row=0, column=3, padx=5, pady=5)
+
+    def handle_process_return():
+
+        selected = items_tree.focus()
+        if not selected:
+            messagebox.showerror("Error", "Please select a product from the list.")
+            return
+
+        values = items_tree.item(selected, "values")
+        product_id = int(values[0])
+        sold_qty = int(values[2])
+        already_returned = int(values[3])
+
+        success = process_sale_return(
+            current_sale_id.get(), product_id, return_qty.get(),
+            reason.get().strip(), sold_qty, already_returned
+        )
+
+        if success:
+            load_items_for_return()
+            return_qty.set(1)
+            reason.set("")
+
+    # ---------------- Items Table ----------------
+    items_frame = LabelFrame(return_win, text="Sold Items", padx=10, pady=10)
+    items_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+    items_tree = ttk.Treeview(
+        items_frame,
+        columns=("product_id", "product", "sold_qty", "already_returned", "remaining"),
+        show="headings"
+    )
+    items_tree.heading("product", text="Product")
+    items_tree.heading("sold_qty", text="Sold Qty")
+    items_tree.heading("already_returned", text="Already Returned")
+    items_tree.heading("remaining", text="Remaining")
+    items_tree.column("product", width=250)
+    items_tree.column("sold_qty", width=90, anchor=CENTER)
+    items_tree.column("already_returned", width=130, anchor=CENTER)
+    items_tree.column("remaining", width=100, anchor=CENTER)
+    items_tree["displaycolumns"] = ("product", "sold_qty", "already_returned", "remaining")
+    items_tree.pack(fill=BOTH, expand=True)
+
+    def load_items_for_return():
+
+        for row in items_tree.get_children():
+            items_tree.delete(row)
+
+        sale_no = sale_no_search.get().strip()
+        if sale_no == "":
+            messagebox.showerror("Error", "Please enter a Sale No.")
+            return
+
+        # find sale_id from sale_no via history search (reuses existing function)
+        matches = get_sales_history(sale_no)
+        if not matches:
+            messagebox.showerror("Error", "No sale found with that Sale No.")
+            return
+
+        sale_id = matches[0][0]
+        current_sale_id.set(sale_id)
+
+        for product_id, product_name, sold_qty, already_returned in get_sale_items_for_return(sale_id):
+            remaining = sold_qty - already_returned
+            items_tree.insert("", "end", values=(
+                product_id, product_name, sold_qty, already_returned, remaining
+            ))
+
+    # ---------------- Return FReturn ----------------
+    
+    Button(
+        form_frame, text="Process Return", width=16,
+        command=handle_process_return
+    ).grid(row=0, column=4, padx=10, pady=5)
