@@ -1,0 +1,798 @@
+from tkinter import *
+from tkinter import ttk
+from tkinter import messagebox
+from tkinter import CENTER, E
+from utils.tree_helpers import clear_treeview 
+# ==========================================
+# Third Party
+# ==========================================
+# from ttkbootstrap import Style
+
+# ==========================================
+# Local Modules
+# ==========================================
+# from repositories import purchase_repository as repo
+from utils.tree_helpers import build_treeview, reload_treeview
+from utils.ui_helpers import add_buttons, labeled_entry
+
+from services.purchase_summary import PurchaseSummary
+
+from services.purchase_service import (
+    
+    calculate_purchase_totals, remove_cart_item, clear_cart, save_purchase, 
+    load_suppliers, load_products, get_product_cost_price, 
+    get_product_stock, get_purchase_history, get_purchase_header, get_purchase_items
+)
+# =====================================
+# Product Selected
+# =====================================
+
+def on_product_selected(event, purchase_price, 
+                        current_stock, 
+                        stock_after_purchase, product_map):
+
+    product_name = event.widget.get()
+
+    product_id = product_map.get(product_name)
+
+    if product_id is None:
+        return
+
+    purchase_price.set(get_product_cost_price(product_name))
+    stock = get_product_stock(product_name)
+    current_stock.set(stock)
+    stock_after_purchase.set(stock)
+# -------------------------------------
+#   Validation Function
+# -------------------------------------
+def validate_cart_input(
+        product,
+        purchase_price,
+        quantity
+    ):
+
+        product_name = product.get().strip()
+
+        if product_name == "":
+            messagebox.showerror(
+                "Error",
+                "Please select a product."
+            )
+            return None
+
+        if purchase_price.get() == "":
+            messagebox.showerror(
+                "Error",
+                "Purchase Price is required."
+            )
+            return None
+
+        if quantity.get() == "":
+            messagebox.showerror(
+                "Error",
+                "Quantity is required."
+            )
+            return None
+
+        try:
+
+            price = float(purchase_price.get())
+
+            qty = int(quantity.get())
+
+        except ValueError:
+
+            messagebox.showerror(
+                "Error",
+                "Invalid Price or Quantity."
+            )
+            return None
+
+        return (
+            product_name,
+            price,
+            qty
+        )
+# -----------------------------------
+#   Clear Purchase Fields
+# -----------------------------------
+def clear_purchase_fields(
+
+        product,
+        purchase_price,
+        quantity,
+        line_total,
+        product_combo
+
+    ):
+        product.set("")
+        purchase_price.set("")
+        quantity.set("")
+        line_total.set("0.00")
+
+        product_combo.focus_set()
+
+# =====================================
+# Merge Cart Item
+# =====================================
+
+def merge_cart_item(
+        cart_tree,
+        product_id,
+        product_name,
+        price,
+        qty
+    ):
+
+        for item in cart_tree.get_children():
+
+            values = cart_tree.item(item, "values")
+
+            old_product_id = int(values[0])
+            old_price = float(values[2])
+
+            if old_product_id == product_id and old_price == price:
+
+                new_qty = int(values[3]) + qty
+
+                new_line_total = new_qty * price
+
+                cart_tree.item(
+                    item,
+                    values=(
+                        product_id,
+                        product_name,
+                        price,
+                        new_qty,
+                        new_line_total
+                    )
+                )
+                return True
+        return False
+# =====================================
+# Insert Cart Item
+# =====================================
+def insert_cart_item(
+        cart_tree,
+        product_id,
+        product_name,
+        price,
+        qty
+    ):
+        line_total = price * qty
+
+        cart_tree.insert(
+            "",
+            END,
+            values=(
+                product_id,
+                product_name,
+                price,
+                qty,
+                line_total
+            )
+        )
+# ==========================================================
+# CALCULATE LINE TOTAL
+# ==========================================================
+def calculate_line_total(
+        purchase_price,
+        quantity,
+        line_total
+    ):
+    """
+    Calculate Line Total
+    Formula:
+        Purchase Price × Quantity
+    """
+    try:
+        price = float(
+            purchase_price.get().strip()
+        )
+        qty = int(
+            quantity.get().strip()
+        )
+        total = price * qty
+
+        line_total.set(
+            f"{total:.2f}"
+        )
+    except ValueError:
+        line_total.set("0.00")
+# ===== Upsate Stock Preview  ===========
+def update_stock_preview(current_stock, quantity, stock_after_purchase):
+    try:
+        stock = int(current_stock.get())
+        qty = int(quantity.get().strip())
+        stock_after_purchase.set(str(stock + qty))
+    except ValueError:
+        stock_after_purchase.set(current_stock.get())
+
+# =====================================
+# Add To Cart
+# =====================================
+def add_to_cart(
+        cart_tree, product_combo, product_map,
+        product, purchase_price, quantity, line_total,
+        summary, supplier
+    ):
+        if supplier.get().strip() == "":
+            messagebox.showerror("Error", "Please select a supplier before adding items.")
+            return
+# -----------------------------------------
+# Validate User Input
+# -----------------------------------------
+        data = validate_cart_input(product, purchase_price, quantity)
+        if data is None:
+            return
+
+        product_name, price, qty = data
+
+        product_id = product_map[product_name]
+    # -----------------------------------------
+    # Merge Existing Cart Item
+    # -----------------------------------------
+        merged = merge_cart_item(
+            cart_tree,
+            product_id,
+            product_name,
+            price,
+            qty
+        )
+        if not merged:
+    # -----------------------------------------
+    # Insert New Cart Item
+    # -----------------------------------------
+            insert_cart_item(
+                cart_tree, product_id,
+                product_name,
+                price, qty
+            )
+    # -----------------------------------------
+    # Clear Entry Fields
+    # -----------------------------------------
+        clear_purchase_fields(
+            product, purchase_price,
+            quantity, line_total,
+            product_combo
+        )
+    # -----------------------------------------
+    # Update purchase totals
+    # -----------------------------------------
+        calculate_purchase_totals(cart_tree, summary)
+# ----------------------------------------------
+#  Purchase Window
+# ------------------------------------------
+def purchase_window():
+
+    win = Toplevel()
+    win.title("Purchase Management")
+    win.state("zoomed")   # window
+
+    # Center Window
+    width = 1150
+    height = 700
+
+    screen_width = win.winfo_screenwidth()
+    screen_height = win.winfo_screenheight()
+
+    x = int((screen_width / 2) - (width / 2))
+    y = int((screen_height / 2) - (height / 2))
+
+    win.geometry(f"{width}x{height}+{x}+{y}")
+
+    win.focus_force()
+    # ==========================
+    # Variables
+    # ==========================
+
+    supplier = StringVar()
+    invoice_no = StringVar()
+    purchase_date = StringVar()
+    product = StringVar()
+    purchase_price = StringVar()
+    quantity = StringVar()
+    current_stock = StringVar(value="0")
+    stock_after_purchase = StringVar(value="0")
+
+    line_total = StringVar(value="0.00")
+    summary = PurchaseSummary()
+
+# ==========================================================
+# Main Layout Frame
+# ==========================================================
+    main_frame = Frame(win, bg="white")
+
+    main_frame.pack(
+        fill=BOTH,
+        expand=True,
+        padx=10,
+        pady=10
+    )
+    main_frame.columnconfigure(0, weight=3)
+    main_frame.columnconfigure(1, weight=1)
+    main_frame.rowconfigure(1, weight=1)
+
+    # -------------------------------------
+    # Purchase Details
+    # ==========================
+    purchase_frame = LabelFrame(
+        win,
+        text="Purchase Details",
+        padx=10,
+        pady=10
+    )
+    purchase_frame.grid(
+        in_=main_frame,
+        row=0,
+        column=0,
+        padx=(0, 10),
+        pady=5,
+        sticky="nsew"
+    )
+    #-------------------------------------------------
+    # Purchase Cart
+    # ==========================
+
+    cart_frame = LabelFrame(
+        win,
+        text="Purchase Cart",
+        padx=10,
+        pady=10
+    )
+
+    cart_frame.grid(
+        in_=main_frame,
+        row=1,
+        column=0,
+        columnspan=2,
+        pady=(10, 0),
+        sticky="nsew"
+    )
+# -------------------------------------
+#       ScrollBar
+    scrollbar_y = Scrollbar(cart_frame)
+
+    scrollbar_y.pack(
+        side=RIGHT,
+        fill=Y
+    )
+    # ==========================================================
+    # Purchase Items TreeView, Heading, Columns
+    # ==========================================================
+    CART_COLUMNS = [
+    {"key": "Product ID", "heading": "Product ID", "width": 90, "anchor": CENTER},
+    {"key": "Product", "heading": "Product", "width": 250, "anchor": W},
+    {"key": "Purchase Price", "heading": "Purchase Price", "width": 130, "anchor": E},
+    {"key": "Quantity", "heading": "Quantity", "width": 100, "anchor": CENTER},
+    {"key": "Line Total", "heading": "Line Total", "width": 140, "anchor": E},
+    ]
+    cart_tree = build_treeview(cart_frame, CART_COLUMNS)
+    cart_tree.configure(yscrollcommand=scrollbar_y.set)
+    scrollbar_y.config(command=cart_tree.yview)
+
+    #   TreeView Hide Product ID, User ID Not Seen
+    cart_tree["displaycolumns"] = (
+        "Product",
+        "Purchase Price",
+        "Quantity",
+        "Line Total"
+    )
+    # ----Pack------
+    cart_tree.pack(fill=BOTH,expand=True)
+    # ------------------------------------
+    #====  Handle ==========
+    def handle_save_purchase():
+        save_purchase(supplier, invoice_no, purchase_date, cart_tree, summary)
+        product.set("")
+        purchase_price.set("")
+        quantity.set("")
+        line_total.set("0.00")
+        current_stock.set("0")
+        stock_after_purchase.set("0")
+    # =====================================
+    # Purchase Summary
+    # =====================================
+
+    summary_frame = LabelFrame(
+        win,
+        text="Purchase Summary",
+        padx=10,
+        pady=10
+        )
+    summary_frame.grid(
+        in_=main_frame,
+        row=0,
+        column=1,
+        padx=(10, 0),
+        pady=5,
+        sticky="new"
+    )
+
+    def refresh_totals():
+        calculate_purchase_totals(cart_tree, summary)
+
+    labeled_entry(summary_frame, "Gross Total", 0, 0, summary.gross_total, readonly=True)
+
+    discount_entry = labeled_entry(summary_frame, "Discount %", 1, 0, summary.discount)
+    discount_entry.bind("<KeyRelease>", lambda event: refresh_totals())
+
+    labeled_entry(summary_frame, "Discount Amount", 2, 0, summary.discount_amount, readonly=True)
+
+    tax_entry = labeled_entry(summary_frame, "Tax %", 3, 0, summary.tax)
+    tax_entry.bind("<KeyRelease>", lambda event: refresh_totals())
+
+    labeled_entry(summary_frame, "Tax Amount", 4, 0, summary.tax_amount, readonly=True)
+
+    Label(summary_frame, text="Net Total", font=("Arial", 10, "bold")
+        ).grid(row=5, column=0, sticky="w", pady=5)
+    Entry(summary_frame, textvariable=summary.net_total,
+        width=20, state="readonly", justify="right",
+        font=("Arial", 10, "bold")
+        ).grid(row=5, column=1, padx=10)
+    
+# =================================================
+#  Label
+# -----------------------------------
+    Label(
+        purchase_frame,
+            text="Supplier"
+        ).grid(row=0, column=0, padx=10, pady=8, sticky="w")
+    # ----------------------------------------------------------
+    # Invoice No
+    # ----------------------------------------------------------
+    Label(
+        purchase_frame,
+        text="Invoice No"
+        ).grid(row=0, column=2, padx=10, pady=8, sticky="w")
+
+    invoice_entry = Entry(
+            purchase_frame,
+            textvariable=invoice_no
+        )
+
+    invoice_entry.grid(row=0, column=3, padx=10, pady=8, sticky="ew")
+
+
+    Label(
+        purchase_frame,
+            text="Product"
+        ).grid(row=1, column=0, padx=10, pady=8, sticky="w")
+# ----------------------------------------------------------
+# Purchase Date
+# ----------------------------------------------------------
+    Label(
+        purchase_frame,
+        text="Purchase Date"
+        ).grid(row=1, column=2, padx=10, pady=8, sticky="w")
+
+    purchase_date_entry = Entry(
+        purchase_frame,
+        textvariable=purchase_date
+    )
+    purchase_date_entry.grid(row=1, column=3, padx=10, pady=8, sticky="ew")
+
+    Label(
+        purchase_frame,
+            text="Purchase Price"
+        ).grid(row=2, column=0, padx=10, pady=8, sticky="w")
+    labeled_entry(
+         purchase_frame, "Current Stock", 3, 2, current_stock, readonly=True)
+    labeled_entry(
+         purchase_frame, "Stock After Purchase", 4, 0, stock_after_purchase, readonly=True)
+    
+    Label(
+        purchase_frame,
+            text="Quantity"
+        ).grid(row=2, column=2, padx=10, pady=8, sticky="w")
+    # ----------------------------------------------
+    # Line Total
+    # ----------------------------------------------
+    Label(
+        purchase_frame,
+            text="Line Total"
+        ).grid(row=3, column=0, padx=10, pady=8, sticky="w")
+    line_total_entry = Entry(
+            purchase_frame,
+            textvariable=line_total,
+            state="readonly",
+            justify="right"
+        )
+    line_total_entry.grid(row=3, column=1, padx=10, pady=8, sticky="ew")
+# ----------------------------------------------
+# Supplier Combobox
+# ----------------------------------------------
+    supplier_combo = ttk.Combobox(
+        purchase_frame,
+        textvariable=supplier,
+        width=35,
+        state="readonly"
+    )
+
+    supplier_combo.grid(
+        row=0,
+        column=1,
+        padx=10,
+        pady=8
+    )
+# ----------------------------------------------
+# Product Combobox
+# ---------------------------------------------
+    product_combo = ttk.Combobox(
+        purchase_frame,
+        textvariable=product,
+        width=35,
+        state="readonly"
+    )
+
+    product_combo.grid(
+        row=1,
+        column=1,
+        padx=10,
+        pady=8
+    )
+# ---------------------------------------------
+# Purchase Price Entry
+# --------------------------------------------
+    purchase_price_entry = Entry(
+        purchase_frame,
+        textvariable=purchase_price,
+    )
+    purchase_price_entry.grid(
+        row=2,
+        column=1,
+        padx=10,
+        pady=8,
+        sticky="ew"
+    )
+# ----------------------------------------------
+# Quantity Entry
+# ----------------------------------------------
+    quantity_entry = Entry(
+        purchase_frame,
+        textvariable=quantity,
+    )
+    quantity_entry.grid(
+        row=2,
+        column=3,
+        padx=10,
+        pady=8,
+        sticky="ew"
+    )  
+# -----------------------------------------
+#       Bind
+# -----------------------------------------
+    purchase_price_entry.bind(
+        "<KeyRelease>",
+        lambda event: calculate_line_total(
+            purchase_price,
+            quantity,
+            line_total
+        )
+    )
+
+    quantity_entry.bind(
+        "<KeyRelease>",
+        lambda event:(
+            calculate_line_total(purchase_price, quantity, line_total),
+            update_stock_preview(current_stock, quantity, stock_after_purchase)
+        )
+    )
+# =====================================
+# Buttons Frame
+# =====================================
+    button_frame = Frame(purchase_frame)
+
+    button_frame.grid(
+        row=5,
+        column=0,
+        columnspan=4,
+        pady=(15, 5),
+        sticky="ew"
+    )
+    button_frame.columnconfigure((0, 1, 2, 3, 4), weight=1)
+
+# =====================================
+# Buttons
+# =====================================
+    add_buttons(button_frame, [
+            ("Add To Cart", lambda: add_to_cart(cart_tree, product_combo, product_map,
+                product, purchase_price, quantity, line_total, summary, supplier)),
+            ("Remove Item", lambda: remove_cart_item(cart_tree, summary)),
+            ("Clear Cart", lambda: clear_cart(cart_tree, summary)),
+            ("Save Purchase", handle_save_purchase),
+            ("Purchase History", purchase_history),
+        ])
+# ----------------------------------------------
+#  Supplier , Products load in combobox
+# -------------------------------------------
+    supplier_combo["values"] = load_suppliers()
+    products = load_products()
+
+    product_map = {}
+
+    product_names = []
+
+    for product_id, product_name in products:
+
+        product_map[product_name] = product_id
+
+        product_names.append(product_name)
+
+    product_combo["values"] = product_names
+# -----------------------------------------------
+#  event bind
+# -----------------------------------------
+    product_combo.bind(
+    "<<ComboboxSelected>>",
+    lambda event: on_product_selected(
+        event, purchase_price,
+        current_stock, stock_after_purchase, 
+        product_map
+        )
+    )
+# --------------------------------------------
+# =====================================
+# Load Purchase History (into Treeview)
+# =====================================
+def load_purchase_history(history_tree, search_term=None):
+    reload_treeview(history_tree, get_purchase_history(search_term))
+
+# =====================================
+# Purchase History Window
+# =====================================
+def purchase_history():
+
+    history_win = Toplevel()
+    history_win.title("Purchase History")
+    history_win.geometry("1250x600")
+    history_win.resizable(True, True)
+# ========================================================================
+    # Search Frame
+# =========================================================================
+    search_frame = LabelFrame(history_win, text="Search Purchase", padx=10, pady=10)
+    search_frame.pack(fill="x", padx=10, pady=10)
+
+    Label(search_frame, text="Purchase No").grid(row=0, column=0, padx=5)
+    purchase_search = StringVar()
+
+    Entry(search_frame, textvariable=purchase_search, width=30).grid(row=0, column=1, padx=5)
+# ===========================================
+        # Button
+# ============================================
+    Button(
+        search_frame, text="Search", width=12,
+        command=lambda: load_purchase_history(history_tree, purchase_search.get().strip())
+    ).grid(row=0, column=2, padx=5)
+
+    Button(
+        search_frame, text="Show All", width=12,
+        command=lambda: load_purchase_history(history_tree)
+    ).grid(row=0, column=3, padx=5)
+# ============================================================================
+    # Table Frame
+# ============================================================================
+    table_frame = Frame(history_win)
+    table_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+    scroll_y = Scrollbar(table_frame, orient=VERTICAL)
+    scroll_x = Scrollbar(table_frame, orient=HORIZONTAL)
+
+    HISTORY_COLUMNS = [
+    {"key": "id", "heading": "ID", "width": 60, "anchor": CENTER},
+    {"key": "purchase_no", "heading": "Purchase No", "width": 130},
+    {"key": "supplier", "heading": "Supplier", "width": 180},
+    {"key": "gross_total", "heading": "Gross Total", "width": 100, "anchor": E},
+    {"key": "discount", "heading": "Discount %", "width": 90, "anchor": E},
+    {"key": "discount_amount", "heading": "Discount Amount", "width": 120, "anchor": E},
+    {"key": "tax", "heading": "Tax %", "width": 90, "anchor": E},
+    {"key": "tax_amount", "heading": "Tax Amount", "width": 100, "anchor": E},
+    {"key": "net_total", "heading": "Net Total", "width": 120, "anchor": E},
+    {"key": "date", "heading": "Date", "width": 170},
+    ]
+    history_tree = build_treeview(table_frame, HISTORY_COLUMNS)
+    history_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+    scroll_y.config(command=history_tree.yview)
+    scroll_x.config(command=history_tree.xview)
+
+    # history_tree["show"] = "headings"
+    history_tree.pack(fill=BOTH, expand=True)
+
+    load_purchase_history(history_tree)
+
+    history_tree.bind("<Double-1>", show_purchase_details)
+
+
+# =====================================
+# Load Purchase Details Items (into Treeview)
+# =====================================
+def load_purchase_details_items(purchase_id, details_tree):
+    clear_treeview(details_tree)
+    rows = get_purchase_items(purchase_id)
+    for index, (product, price, qty, total) in enumerate(rows, start=1):
+        details_tree.insert("", "end", values=(index, product, 
+                                               f"{price:,.2f}", qty, f"{total:,.2f}"))
+
+# =====================================
+# Purchase Details Window
+# =====================================
+def show_purchase_details(event):
+
+    history_tree = event.widget
+    selected = history_tree.focus()
+
+    if not selected:
+        return
+
+    values = history_tree.item(selected, "values")
+    purchase_id = values[0]
+
+    (
+    purchase_no, invoice_no_value, supplier_name, purchase_date,
+    gross_total, discount, discount_amount,
+    tax, tax_amount, net_total
+    ) = get_purchase_header(purchase_id)
+
+    details_win = Toplevel()
+    details_win.title("Purchase Details")
+    details_win.geometry("850x550")
+    details_win.resizable(False, False)
+
+    header_frame = LabelFrame(details_win, text="Purchase Information", padx=10, pady=10)
+    header_frame.pack(fill="x", padx=10, pady=10)
+
+    Label(
+        header_frame, text=f"Purchase No : {purchase_no}", font=("Arial", 11, "bold")
+    ).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+
+    Label(
+        header_frame, text=f"Supplier : {supplier_name}", font=("Arial", 11)
+    ).grid(row=1, column=0, padx=10, pady=5, sticky="w")
+    Label(
+        header_frame, text=f"Invoice No : {invoice_no_value or '-'}", font=("Arial", 11)
+    ).grid(row=1, column=1, padx=30, pady=5, sticky="w")
+
+    Label(
+        header_frame, text=f"Purchase Date : {purchase_date}", font=("Arial", 11)
+    ).grid(row=2, column=0, padx=10, pady=5, sticky="w")
+# =========================================================================================
+    # Items Frame
+# =========================================================================================
+    items_frame = Frame(details_win)
+    items_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+    DETAILS_COLUMNS = [
+    {"key": "sno", "heading": "S.No", "width": 60, "anchor": CENTER},
+    {"key": "product", "heading": "Product", "width": 280, "anchor": CENTER},
+    {"key": "price", "heading": "Purchase Price", "width": 120, "anchor": E},
+    {"key": "qty", "heading": "Quantity", "width": 100, "anchor": CENTER},
+    {"key": "total", "heading": "Total", "width": 120, "anchor": E},
+    ]
+    details_tree = build_treeview(items_frame, DETAILS_COLUMNS)
+
+    details_tree["show"] = "headings"
+    details_tree.pack(fill=BOTH, expand=True)
+
+    load_purchase_details_items(purchase_id, details_tree)
+# ===========================================================================
+    # Totals Frame
+# ===========================================================================
+    totals_frame = LabelFrame(details_win, text="Totals", padx=10, pady=10)
+
+    Label(
+        totals_frame, text=f"Gross Total : {gross_total:,.2f}"
+    ).grid(row=0, column=0, padx=20, pady=5, sticky="w")
+
+    Label(
+        totals_frame, text=f"Discount : {discount}%  ({discount_amount:,.2f})"
+    ).grid(row=0, column=1, padx=20, pady=5, sticky="w")
+
+    Label(
+        totals_frame, text=f"Tax : {tax}%  ({tax_amount:,.2f})"
+    ).grid(row=0, column=2, padx=20, pady=5, sticky="w")
+
+    Label(
+        totals_frame, text=f"Net Total : {net_total:,.2f}", font=("Arial", 11, "bold")
+    ).grid(row=0, column=3, padx=20, pady=5, sticky="w")
+
+    totals_frame.pack(fill="x", padx=10, pady=(0, 10))

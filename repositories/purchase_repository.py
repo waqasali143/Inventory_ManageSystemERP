@@ -1,0 +1,331 @@
+from database.database import get_connection
+
+# =====================================================================
+# This file only talks to the database (raw SQL). It knows nothing
+# about Tkinter, StringVars, or Treeview widgets. Every function here
+# takes plain Python values in and returns plain Python values out.
+# =====================================================================
+
+
+# =====================================
+# Load Active Suppliers
+# =====================================
+def fetch_active_suppliers():
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT name
+        FROM suppliers
+        WHERE status='Active'
+        ORDER BY name
+    """)
+
+    suppliers = [row[0] for row in cursor.fetchall()]
+
+    conn.close()
+
+    return suppliers
+
+# =====================================
+# Load Active Products
+# =====================================
+def fetch_active_products():
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, name
+        FROM products
+        WHERE status = 'Active'
+        ORDER BY name
+    """)
+
+    products = cursor.fetchall()
+
+    conn.close()
+
+    return products
+
+# =====================================
+# Get Supplier ID
+# =====================================
+def fetch_supplier_id(supplier_name):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id
+        FROM suppliers
+        WHERE name = ?
+    """, (
+        supplier_name,
+    ))
+
+    row = cursor.fetchone()
+
+    conn.close()
+
+    if row is None:
+        return None
+
+    return row[0]
+
+
+# =====================================
+# Get Product Cost Price
+# =====================================
+def fetch_product_cost_price(product_name):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT cost_price
+        FROM products
+        WHERE name = ?
+    """, (
+        product_name,
+    ))
+
+    row = cursor.fetchone()
+
+    conn.close()
+
+    if row:
+        return row[0]
+
+    return ""
+
+# =====================================
+# Generate Purchase Number
+# =====================================
+def generate_purchase_no():
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT MAX(id)
+        FROM purchases
+    """)
+
+    result = cursor.fetchone()
+
+    conn.close()
+
+    if result[0] is None:
+        next_id = 1
+    else:
+        next_id = result[0] + 1
+
+    return f"PUR-{next_id:06d}"
+
+# =====================================
+# Insert Purchase Header
+# (cursor is passed in so the caller controls the transaction/commit)
+# =====================================
+def insert_purchase_header(
+        cursor,
+        purchase_no,
+        invoice_no,
+        supplier_id,
+        purchase_date,
+        gross_total,
+        discount,
+        discount_amount,
+        tax,
+        tax_amount,
+        net_total
+    ):
+
+    cursor.execute("""
+        INSERT INTO purchases(
+            purchase_no,
+            invoice_no,
+            supplier_id,
+            purchase_date,
+            gross_total,
+            discount,
+            discount_amount,
+            tax,
+            tax_amount,
+            net_total
+        )
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        purchase_no,
+        invoice_no,
+        supplier_id,
+        purchase_date,
+        gross_total,
+        discount,
+        discount_amount,
+        tax,
+        tax_amount,
+        net_total
+    ))
+
+    return cursor.lastrowid
+
+# =====================================
+# Insert Purchase Items
+# items: list of tuples -> (product_id, purchase_price, quantity, subtotal)
+# =====================================
+def insert_purchase_items(cursor, purchase_id, items):
+
+    for product_id, purchase_price, quantity, subtotal in items:
+
+        cursor.execute("""
+            INSERT INTO purchase_items(
+                purchase_id,
+                product_id,
+                purchase_price,
+                quantity,
+                subtotal
+            )
+            VALUES(?, ?, ?, ?, ?)
+        """, (
+            purchase_id,
+            product_id,
+            purchase_price,
+            quantity,
+            subtotal
+        ))
+
+
+# =====================================
+# Increase Product Stock
+# =====================================
+def increment_product_stock(cursor, product_id, quantity):
+
+    cursor.execute("""
+        UPDATE products
+        SET quantity = quantity + ?
+        WHERE id = ?
+    """, (
+        quantity,
+        product_id
+    ))
+
+# =====================================
+# Fetch Purchase History
+# (search_term=None -> all rows, otherwise filters by purchase_no)
+# =====================================
+def fetch_purchase_history(search_term=None):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    base_query = """
+        SELECT
+            p.id,
+            p.purchase_no,
+            s.name,
+            p.gross_total,
+            p.discount,
+            p.discount_amount,
+            p.tax,
+            p.tax_amount,
+            p.net_total,
+            p.purchase_date
+        FROM purchases p
+        INNER JOIN suppliers s
+            ON p.supplier_id = s.id
+    """
+
+    if search_term:
+        cursor.execute(
+            base_query + " WHERE p.purchase_no LIKE ? ORDER BY p.id DESC",
+            ("%" + search_term + "%",)
+        )
+    else:
+        cursor.execute(base_query + " ORDER BY p.id DESC")
+
+    rows = cursor.fetchall()
+
+    conn.close()
+
+    return rows
+
+# =====================================
+# Fetch Purchase Header (for details window)
+# =====================================
+def fetch_purchase_header(purchase_id):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            p.purchase_no,
+            p.invoice_no,
+            s.name,
+            p.purchase_date,
+            p.gross_total,
+            p.discount,
+            p.discount_amount,
+            p.tax,
+            p.tax_amount,
+            p.net_total
+        FROM purchases p
+        INNER JOIN suppliers s
+            ON p.supplier_id = s.id
+        WHERE p.id = ?
+    """, (purchase_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    return row
+
+# =====================================
+# Fetch Purchase Items (for details window)
+# =====================================
+def fetch_purchase_items(purchase_id):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            pr.name,
+            pi.purchase_price,
+            pi.quantity,
+            pi.subtotal
+        FROM purchase_items pi
+        INNER JOIN products pr
+            ON pi.product_id = pr.id
+        WHERE pi.purchase_id = ?
+        ORDER BY pi.id
+    """, (
+        purchase_id,
+    ))
+
+    rows = cursor.fetchall()
+
+    conn.close()
+
+    return rows
+# ==============================================
+#          Product Stock
+# =============================================
+def fetch_product_stock(product_name):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT quantity
+        FROM products
+        WHERE name = ?
+    """, (product_name,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return row[0]
+    return 0
