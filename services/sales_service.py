@@ -264,4 +264,9 @@ def get_sale_header(sale_id):
 
 def get_sale_items(sale_id):
     return repo.fetch_sale_items(sale_id)
+# =====================================
+# Return History (admin-facing summary of all returns)
+# =====================================
+def get_all_sale_returns(today_only=False):
+    return repo.fetch_all_sale_returns(today_only)
 

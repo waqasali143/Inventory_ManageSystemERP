@@ -22,7 +22,7 @@ from services.purchase_service import (
     calculate_purchase_totals, remove_cart_item, clear_cart, save_purchase, 
     load_suppliers, load_products, get_product_cost_price, 
     get_product_stock, get_purchase_history, get_purchase_header, get_purchase_items,
-    get_purchase_items_for_return, process_purchase_return
+    get_purchase_items_for_return, process_purchase_return,get_all_purchase_returns
 )
 # =====================================
 # Product Selected
@@ -604,6 +604,8 @@ def purchase_window():
             ("Save Purchase", handle_save_purchase),
             ("Purchase History", purchase_history),
             ("Process Return", open_purchase_return_window),
+            ("Return History", open_return_history_window),
+
         ])
 # ----------------------------------------------
 #  Supplier , Products load in combobox
@@ -646,9 +648,20 @@ def load_purchase_history(history_tree, search_term=None):
 def purchase_history():
 
     history_win = Toplevel()
-    history_win.title("Purchase History")
-    history_win.geometry("1250x600")
-    history_win.resizable(True, True)
+    screen_width = history_win.winfo_screenwidth()
+    screen_height = history_win.winfo_screenheight()
+
+    width = int(screen_width * 0.90)
+    height = int(screen_height * 0.80)
+
+    x = (screen_width - width) // 2
+    y = (screen_height - height) // 2
+
+    history_win.geometry(
+        f"{width}x{height}+{x}+{y}"
+    )
+
+    history_win.minsize(950, 500)
 # ========================================================================
     # Search Frame
 # =========================================================================
@@ -681,18 +694,35 @@ def purchase_history():
     scroll_x = Scrollbar(table_frame, orient=HORIZONTAL)
 
     HISTORY_COLUMNS = [
-    {"key": "id", "heading": "ID", "width": 60, "anchor": CENTER},
-    {"key": "purchase_no", "heading": "Purchase No", "width": 130},
-    {"key": "supplier", "heading": "Supplier", "width": 180},
-    {"key": "gross_total", "heading": "Gross Total", "width": 100, "anchor": E},
-    {"key": "discount", "heading": "Discount %", "width": 90, "anchor": E},
-    {"key": "discount_amount", "heading": "Discount Amount", "width": 120, "anchor": E},
-    {"key": "tax", "heading": "Tax %", "width": 90, "anchor": E},
-    {"key": "tax_amount", "heading": "Tax Amount", "width": 100, "anchor": E},
-    {"key": "net_total", "heading": "Net Total", "width": 120, "anchor": E},
-    {"key": "date", "heading": "Date", "width": 170},
-    {"key": "returned_qty", "heading": "Returned", "width": 90, "anchor": CENTER},
-    ]
+    {"key": "id","heading": "ID","width": 45,"min_width": 40,"anchor": CENTER},
+    {"key": "purchase_no","heading": "Purchase No","width": 105,"min_width": 90,
+     "anchor": CENTER},
+    {"key": "supplier","heading": "Supplier","width": 145, "min_width": 110, 
+     "anchor": W},
+    {"key": "gross_total","heading": "Gross Total", "width": 105,"min_width": 90,
+        "anchor": E
+    },
+    {"key": "discount","heading": "Discount %","width": 75,"min_width": 65,
+        "anchor": CENTER
+    },
+    {"key": "discount_amount","heading": "Discount Amount","width": 115,
+     "min_width": 100, "anchor": E
+    },
+    {"key": "tax", "heading": "Tax %", "width": 65,"min_width": 55,
+        "anchor": CENTER
+    },
+    {"key": "tax_amount","heading": "Tax Amount","width": 105,"min_width": 90,
+        "anchor": E
+    },
+    {"key": "net_total", "heading": "Net Total","width": 110,"min_width": 95,
+        "anchor": E
+    },
+    {"key": "date", "heading": "Date", "width": 145, "min_width": 120,
+     "anchor": CENTER},
+    { "key": "returned_qty", "heading": "Returned", "width": 70,"min_width": 60,
+        "anchor": CENTER
+    },
+]
     
     history_tree = build_treeview(table_frame, HISTORY_COLUMNS)
     history_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
@@ -700,7 +730,9 @@ def purchase_history():
     scroll_x.config(command=history_tree.xview)
 
     # history_tree["show"] = "headings"
-    history_tree.pack(fill=BOTH, expand=True)
+    history_tree.pack(side=TOP,fill=BOTH,expand=True)
+    scroll_y.pack(side=RIGHT,fill=Y)
+    scroll_x.pack(side=BOTTOM,fill=X)
 
     load_purchase_history(history_tree)
 
@@ -908,3 +940,61 @@ def open_purchase_return_window():
             items_tree.insert("", "end", values=(
                 product_id, product_name, purchased_qty, already_returned, remaining
             ))
+# =====================================
+# Return History Window
+# (shows ALL returns across all purchases - lets admin see
+#  everything returned, with a "Today Only" filter)
+# =====================================
+RETURN_HISTORY_COLUMNS = [
+    {"key": "date", "heading": "Return Date", "width": 160, "stretch": False},
+    {"key": "purchase_no", "heading": "Purchase No", "width": 120, "stretch": False},
+    {"key": "product", "heading": "Product", "width": 220, "stretch": False},
+    {"key": "quantity", "heading": "Quantity", "width": 90, "anchor": CENTER, "stretch": False},
+    {"key": "reason", "heading": "Reason", "width": 250, "stretch": False},
+    ]
+
+def open_return_history_window():
+
+    win = Toplevel()
+    win.title("Purchase Return History")
+    size_and_center(win, width_ratio=0.75, height_ratio=0.65)
+
+    filter_frame = Frame(win)
+    filter_frame.pack(fill="x", padx=10, pady=10)
+
+    show_today_only = BooleanVar(value=False)
+
+    def refresh_list():
+        clear_treeview(returns_tree)
+        rows = get_all_purchase_returns(today_only=show_today_only.get())
+        for row in rows:
+            returns_tree.insert("", "end", values=row)
+
+    Checkbutton(
+        filter_frame, text="Today's Returns Only",
+        variable=show_today_only, command=refresh_list
+    ).pack(side=LEFT)
+
+    Button(
+        filter_frame, text="Refresh", width=12,
+        command=refresh_list
+    ).pack(side=RIGHT)
+
+    table_frame = Frame(win)
+    table_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+    scroll_y = Scrollbar(table_frame, orient=VERTICAL)
+    scroll_x = Scrollbar(table_frame, orient=HORIZONTAL)
+
+    returns_tree = build_treeview(table_frame, RETURN_HISTORY_COLUMNS)
+    returns_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+
+    scroll_y.config(command=returns_tree.yview)
+    scroll_x.config(command=returns_tree.xview)
+
+    scroll_y.pack(side=RIGHT, fill=Y)
+    scroll_x.pack(side=BOTTOM, fill=X)
+
+    returns_tree.pack(fill=BOTH, expand=True)
+
+    refresh_list()

@@ -9,7 +9,8 @@ from services.sales_service import (
     validate_sale_line, calculate_sale_totals,
     remove_cart_item, clear_cart, clear_sale_form,
     save_sale, get_sales_history, get_sale_header, get_sale_items,
-    get_sale_items_for_return, get_returns_for_sale, process_sale_return
+    get_sale_items_for_return, get_returns_for_sale, process_sale_return,
+    get_all_sale_returns
 )
 from utils.window_helpers import size_and_center
 # =====================================
@@ -480,6 +481,11 @@ def sales_window():
         toolbar, text="Process Return", width=15,
         command=open_return_window
     ).pack(side=LEFT, padx=5, pady=5)
+
+    Button(
+        toolbar, text="Return History", width=15,
+        command=open_sale_return_history_window
+    ).pack(side=LEFT, padx=5, pady=5)
 # =====================================
 # Sales History Window
 # =====================================
@@ -749,3 +755,71 @@ def open_return_window():
         form_frame, text="Process Return", width=16,
         command=handle_process_return
     ).grid(row=0, column=4, padx=10, pady=5)
+
+# =====================================
+# Return History Window
+# (shows ALL sale returns, with a "Today Only" filter)
+# =====================================
+def open_sale_return_history_window():
+
+    win = Toplevel()
+    win.title("Sales Return History")
+    size_and_center(win, width_ratio=0.75, height_ratio=0.65)
+
+    filter_frame = Frame(win)
+    filter_frame.pack(fill="x", padx=10, pady=10)
+
+    show_today_only = BooleanVar(value=False)
+
+    def refresh_list():
+        for row in returns_tree.get_children():
+            returns_tree.delete(row)
+        rows = get_all_sale_returns(today_only=show_today_only.get())
+        for row in rows:
+            returns_tree.insert("", "end", values=row)
+
+    Checkbutton(
+        filter_frame, text="Today's Returns Only",
+        variable=show_today_only, command=refresh_list
+    ).pack(side=LEFT)
+
+    Button(
+        filter_frame, text="Refresh", width=12,
+        command=refresh_list
+    ).pack(side=RIGHT)
+
+    table_frame = Frame(win)
+    table_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+    scroll_y = Scrollbar(table_frame, orient=VERTICAL)
+    scroll_x = Scrollbar(table_frame, orient=HORIZONTAL)
+
+    returns_tree = ttk.Treeview(
+        table_frame,
+        columns=("date", "sale_no", "product", "quantity", "reason"),
+        show="headings",
+        yscrollcommand=scroll_y.set,
+        xscrollcommand=scroll_x.set
+    )
+
+    returns_tree.heading("date", text="Return Date")
+    returns_tree.heading("sale_no", text="Sale No")
+    returns_tree.heading("product", text="Product")
+    returns_tree.heading("quantity", text="Quantity")
+    returns_tree.heading("reason", text="Reason")
+
+    returns_tree.column("date", width=160, stretch=False)
+    returns_tree.column("sale_no", width=120, stretch=False)
+    returns_tree.column("product", width=220, stretch=False)
+    returns_tree.column("quantity", width=90, anchor=CENTER, stretch=False)
+    returns_tree.column("reason", width=250, stretch=True)
+
+    scroll_y.config(command=returns_tree.yview)
+    scroll_x.config(command=returns_tree.xview)
+
+    scroll_y.pack(side=RIGHT, fill=Y)
+    scroll_x.pack(side=BOTTOM, fill=X)
+
+    returns_tree.pack(fill=BOTH, expand=True)
+
+    refresh_list()

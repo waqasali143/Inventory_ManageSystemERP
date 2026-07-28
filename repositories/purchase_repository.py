@@ -408,3 +408,34 @@ def fetch_returns_for_purchase(purchase_id):
     conn.close()
 
     return rows
+# =========================================================
+# =========  Return Purchase ==========
+# =========================================================
+def fetch_all_purchase_returns(today_only=False):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    base_query = """
+        SELECT
+            pr.return_date,
+            p.purchase_no,
+            pd.name,
+            pr.quantity,
+            pr.reason
+        FROM purchase_returns pr
+        INNER JOIN purchases p ON pr.purchase_id = p.id
+        INNER JOIN products pd ON pr.product_id = pd.id
+    """
+
+    if today_only:
+        cursor.execute(
+            base_query + " WHERE date(pr.return_date) = date('now') ORDER BY pr.id DESC"
+        )
+    else:
+        cursor.execute(base_query + " ORDER BY pr.id DESC")
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows

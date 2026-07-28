@@ -282,3 +282,34 @@ def fetch_returns_for_sale(sale_id):
     conn.close()
 
     return rows
+# =============================================
+# ===== Return Details  ==========
+# =============================================
+def fetch_all_sale_returns(today_only=False):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    base_query = """
+        SELECT
+            sr.return_date,
+            s.sale_no,
+            p.name,
+            sr.quantity,
+            sr.reason
+        FROM sale_returns sr
+        INNER JOIN sales s ON sr.sale_id = s.id
+        INNER JOIN products p ON sr.product_id = p.id
+    """
+
+    if today_only:
+        cursor.execute(
+            base_query + " WHERE date(sr.return_date) = date('now') ORDER BY sr.id DESC"
+        )
+    else:
+        cursor.execute(base_query + " ORDER BY sr.id DESC")
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows

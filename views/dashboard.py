@@ -21,8 +21,9 @@ import sqlite3
 
 from utils import event_bus
 
-from views.sales import sales_window
-from views.purchase import purchase_window
+from views.sales import sales_window, open_sale_return_history_window
+from views.purchase import purchase_window, open_return_history_window
+
 from utils.theme import (
     PRIMARY, PRIMARY_DARK, SIDEBAR, SIDEBAR_ACTIVE, BACKGROUND,
     WHITE, TEXT, MUTED_TEXT, BORDER,
@@ -834,6 +835,18 @@ class Dashboard:
             key="reports"
         )
 
+        self.sidebar_button(
+            "↩ Sales Returns",
+            open_sale_return_history_window,
+            key="sales_returns"
+        )
+
+        self.sidebar_button(
+            "↩ Purchase Returns",
+            open_return_history_window,
+            key="purchase_returns"
+        )
+        
         self.sidebar_button(
             "🚪 Logout",
             self.root.destroy
