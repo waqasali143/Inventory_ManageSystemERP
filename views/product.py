@@ -233,23 +233,6 @@ def update_product(name, cost_price, sale_price, quantity, tree):
     product_quantity = int(
         quantity.get()
     )
-
-    # if (name.get() == "" or cost_price.get() == "" or
-    #     sale_price.get() == "" or quantity.get() == ""):
-    #     messagebox.showerror("Error", "All fields are required.")
-    #     return
-    
-    # try:
-    #     product_cost_price = float(cost_price.get())
-    #     product_sale_price = float(sale_price.get())
-    #     product_quantity = int(quantity.get())
-
-    # except ValueError:
-    #     messagebox.showerror(
-    #         "Invalid Input",
-    #         "Cost Price and Sale Price must be numbers and Quantity must be an integer."
-    #     )
-    #     return
 # ----------------------------------------
 #   database connection
 # --------------------------------------
@@ -311,6 +294,7 @@ def update_product(name, cost_price, sale_price, quantity, tree):
     selected_id = None
 # ==========================================
 #  Delete Product Function
+# ==========================================
 
 def delete_product(name, cost_price, sale_price, quantity, tree):
 
@@ -359,7 +343,7 @@ def delete_product(name, cost_price, sale_price, quantity, tree):
         selected_id = None
 # ==========================================
 #  Clear Function
-
+# ========================================
 def clear_fields(name, cost_price, sale_price, quantity):
 
     global selected_id

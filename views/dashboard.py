@@ -13,7 +13,7 @@ except ImportError:
 
 from datetime import datetime
 from time import strftime
-
+from services.settings_service import get_currency, set_currency
 from views import product
 from views import supplier
 from views import customer
@@ -110,7 +110,8 @@ class Dashboard:
         self.create_datetime()
 
         self.create_refresh_button()
-        # ===========================================================
+        self.create_currency_selector()
+# ===========================================================
 # REFRESH BUTTON
 # ===========================================================
     def create_refresh_button(self):
@@ -131,6 +132,35 @@ class Dashboard:
             pady=4
         )
         self.refresh_btn.pack(side=RIGHT, padx=(0, 15))
+# ===========================================================
+# CURRENCY SELECTOR
+# ===========================================================
+    def create_currency_selector(self):
+
+        currency_frame = Frame(self.header, bg=PRIMARY)
+        currency_frame.pack(side=RIGHT, padx=(0, 15))
+
+        Label(
+            currency_frame, text="Currency:",
+            bg=PRIMARY, fg=WHITE, font=FONT_BODY
+        ).pack(side=LEFT, padx=(0, 5))
+
+        self.currency_var = StringVar(value=get_currency())
+
+        currency_dropdown = ttk.Combobox(
+            currency_frame, textvariable=self.currency_var,
+            values=["Rs", "$", "€", "£", "₹"],
+            width=5, state="readonly"
+        )
+        currency_dropdown.pack(side=LEFT)
+
+        currency_dropdown.bind(
+            "<<ComboboxSelected>>",
+            lambda event: self.on_currency_change()
+        )
+
+    def on_currency_change(self):
+        set_currency(self.currency_var.get())
 # ===========================================================
 # MANUAL REFRESH (with brief visual feedback)
 # ===========================================================

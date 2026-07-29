@@ -233,6 +233,11 @@ def fetch_purchase_history(search_term=None):
             p.net_total,
             p.purchase_date,
             COALESCE((
+                SELECT SUM(pi.quantity)
+                FROM purchase_items pi
+                WHERE pi.purchase_id = p.id
+            ), 0) AS total_quantity,
+            COALESCE((
                     SELECT SUM(pr.quantity)
                     FROM purchase_returns pr
                     WHERE pr.purchase_id = p.id
@@ -434,6 +439,27 @@ def fetch_all_purchase_returns(today_only=False):
         )
     else:
         cursor.execute(base_query + " ORDER BY pr.id DESC")
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows
+# ==============================================
+# ======  purchases_by_supplier  =======
+# =============================================
+def fetch_purchases_by_supplier(supplier_id):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            p.id, p.purchase_no, p.purchase_date,
+            p.gross_total, p.discount_amount, p.tax_amount, p.net_total
+        FROM purchases p
+        WHERE p.supplier_id = ?
+        ORDER BY p.id DESC
+    """, (supplier_id,))
 
     rows = cursor.fetchall()
     conn.close()

@@ -15,10 +15,10 @@ from utils.tree_helpers import clear_treeview
 from utils.tree_helpers import build_treeview, reload_treeview
 from utils.ui_helpers import add_buttons, labeled_entry
 
+from services.settings_service import format_currency
 from services.purchase_summary import PurchaseSummary
 from utils.window_helpers import size_and_center
 from services.purchase_service import (
-    
     calculate_purchase_totals, remove_cart_item, clear_cart, save_purchase, 
     load_suppliers, load_products, get_product_cost_price, 
     get_product_stock, get_purchase_history, get_purchase_header, get_purchase_items,
@@ -299,6 +299,21 @@ def purchase_window():
     line_total = StringVar(value="0.00")
     summary = PurchaseSummary()
 
+    gross_display = StringVar(value=format_currency(0))
+    discount_amt_display = StringVar(value=format_currency(0))
+    tax_amt_display = StringVar(value=format_currency(0))
+    net_display = StringVar(value=format_currency(0))
+
+    def sync_currency_displays(*args):
+        gross_display.set(format_currency(float(summary.gross_total.get() or 0)))
+        discount_amt_display.set(format_currency(float(summary.discount_amount.get() or 0)))
+        tax_amt_display.set(format_currency(float(summary.tax_amount.get() or 0)))
+        net_display.set(format_currency(float(summary.net_total.get() or 0)))
+
+    summary.gross_total.trace_add("write", sync_currency_displays)
+    summary.discount_amount.trace_add("write", sync_currency_displays)
+    summary.tax_amount.trace_add("write", sync_currency_displays)
+    summary.net_total.trace_add("write", sync_currency_displays)
 # ==========================================================
 # Main Layout Frame
 # ==========================================================
@@ -412,25 +427,27 @@ def purchase_window():
 
     def refresh_totals():
         calculate_purchase_totals(cart_tree, summary)
-
-    labeled_entry(summary_frame, "Gross Total", 0, 0, summary.gross_total, readonly=True)
+    
+    labeled_entry(summary_frame, "Gross Total", 0, 0, gross_display, readonly=True)
 
     discount_entry = labeled_entry(summary_frame, "Discount %", 1, 0, summary.discount)
     discount_entry.bind("<KeyRelease>", lambda event: refresh_totals())
 
-    labeled_entry(summary_frame, "Discount Amount", 2, 0, summary.discount_amount, readonly=True)
+    labeled_entry(summary_frame, "Discount Amount", 2, 0, discount_amt_display, readonly=True)
 
     tax_entry = labeled_entry(summary_frame, "Tax %", 3, 0, summary.tax)
     tax_entry.bind("<KeyRelease>", lambda event: refresh_totals())
 
-    labeled_entry(summary_frame, "Tax Amount", 4, 0, summary.tax_amount, readonly=True)
+    labeled_entry(summary_frame, "Tax Amount", 4, 0, tax_amt_display, readonly=True)
 
     Label(summary_frame, text="Net Total", font=("Arial", 10, "bold")
         ).grid(row=5, column=0, sticky="w", pady=5)
-    Entry(summary_frame, textvariable=summary.net_total,
+    Entry(summary_frame, textvariable=net_display,
         width=20, state="readonly", justify="right",
         font=("Arial", 10, "bold")
         ).grid(row=5, column=1, padx=10)
+
+    refresh_totals()  # show correctly formatted currency as soon as the window opens
     
 # =================================================
 #  Label
@@ -640,7 +657,17 @@ def purchase_window():
 # Load Purchase History (into Treeview)
 # =====================================
 def load_purchase_history(history_tree, search_term=None):
-    reload_treeview(history_tree, get_purchase_history(search_term))
+    rows = get_purchase_history(search_term)
+    formatted_rows = [
+        (
+            row[0], row[1], row[2],
+            format_currency(row[3]), row[4], format_currency(row[5]),
+            row[6], format_currency(row[7]), format_currency(row[8]),
+            row[9], row[10], row[11]
+        )
+        for row in rows
+    ]
+    reload_treeview(history_tree, formatted_rows)
 
 # =====================================
 # Purchase History Window
@@ -697,32 +724,27 @@ def purchase_history():
     {"key": "id","heading": "ID","width": 45,"min_width": 40,"anchor": CENTER},
     {"key": "purchase_no","heading": "Purchase No","width": 105,"min_width": 90,
      "anchor": CENTER},
-    {"key": "supplier","heading": "Supplier","width": 145, "min_width": 110, 
-     "anchor": W},
+    {"key": "supplier","heading": "Supplier","width": 110, "min_width": 105, 
+     "anchor": CENTER},
     {"key": "gross_total","heading": "Gross Total", "width": 105,"min_width": 90,
-        "anchor": E
-    },
+        "anchor": E},
     {"key": "discount","heading": "Discount %","width": 75,"min_width": 65,
-        "anchor": CENTER
-    },
+        "anchor": CENTER},
     {"key": "discount_amount","heading": "Discount Amount","width": 115,
-     "min_width": 100, "anchor": E
-    },
+     "min_width": 100, "anchor": E},
     {"key": "tax", "heading": "Tax %", "width": 65,"min_width": 55,
-        "anchor": CENTER
-    },
+        "anchor": CENTER},
     {"key": "tax_amount","heading": "Tax Amount","width": 105,"min_width": 90,
-        "anchor": E
-    },
+        "anchor": E},
     {"key": "net_total", "heading": "Net Total","width": 110,"min_width": 95,
-        "anchor": E
-    },
+        "anchor": E},
     {"key": "date", "heading": "Date", "width": 145, "min_width": 120,
      "anchor": CENTER},
+    { "key": "quantity", "heading": "Qty", "width": 60, "min_width": 50,
+        "anchor": CENTER},
     { "key": "returned_qty", "heading": "Returned", "width": 70,"min_width": 60,
-        "anchor": CENTER
-    },
-]
+        "anchor": CENTER},
+    ]
     
     history_tree = build_treeview(table_frame, HISTORY_COLUMNS)
     history_tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
@@ -746,8 +768,8 @@ def load_purchase_details_items(purchase_id, details_tree):
     clear_treeview(details_tree)
     rows = get_purchase_items(purchase_id)
     for index, (product, price, qty, total) in enumerate(rows, start=1):
-        details_tree.insert("", "end", values=(index, product, 
-                                               f"{price:,.2f}", qty, f"{total:,.2f}"))
+        details_tree.insert("", "end", values=(index, product,
+                                               format_currency(price), qty, format_currency(total)))
 
 # =====================================
 # Purchase Details Window
@@ -816,19 +838,19 @@ def show_purchase_details(event):
     totals_frame = LabelFrame(details_win, text="Totals", padx=10, pady=10)
 
     Label(
-        totals_frame, text=f"Gross Total : {gross_total:,.2f}"
+        totals_frame, text=f"Gross Total : {format_currency(gross_total)}"
     ).grid(row=0, column=0, padx=20, pady=5, sticky="w")
 
     Label(
-        totals_frame, text=f"Discount : {discount}%  ({discount_amount:,.2f})"
+        totals_frame, text=f"Discount : {discount}%  ({format_currency(discount_amount)})"
     ).grid(row=0, column=1, padx=20, pady=5, sticky="w")
 
     Label(
-        totals_frame, text=f"Tax : {tax}%  ({tax_amount:,.2f})"
+        totals_frame, text=f"Tax : {tax}%  ({format_currency(tax_amount)})"
     ).grid(row=0, column=2, padx=20, pady=5, sticky="w")
 
     Label(
-        totals_frame, text=f"Net Total : {net_total:,.2f}", font=("Arial", 11, "bold")
+        totals_frame, text=f"Net Total : {format_currency(net_total)}", font=("Arial", 11, "bold")
     ).grid(row=0, column=3, padx=20, pady=5, sticky="w")
 
     totals_frame.pack(fill="x", padx=10, pady=(0, 10))

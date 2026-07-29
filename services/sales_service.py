@@ -269,4 +269,8 @@ def get_sale_items(sale_id):
 # =====================================
 def get_all_sale_returns(today_only=False):
     return repo.fetch_all_sale_returns(today_only)
-
+# =====================================
+# Customer-wise Sales History
+# =====================================
+def get_sales_by_customer(customer_id):
+    return repo.fetch_sales_by_customer(customer_id)

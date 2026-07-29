@@ -13,6 +13,7 @@ from services.sales_service import (
     get_all_sale_returns
 )
 from utils.window_helpers import size_and_center
+from services.settings_service import format_currency
 # =====================================
 # Sales Window
 # =====================================
@@ -22,7 +23,7 @@ def sales_window():
 
     win.title("Sales Management")
 
-    size_and_center(win, width_ratio=0.9, height_ratio=0.88)
+    size_and_center(win, width_ratio=0.9, height_ratio=0.88, resizable=True)
 
     win.focus_force()
 
@@ -75,16 +76,25 @@ def sales_window():
     # -----------------------------
     summary = SalesSummary()
 
+    gross_display = StringVar(value=format_currency(0))
+    discount_amt_display = StringVar(value=format_currency(0))
+    tax_amt_display = StringVar(value=format_currency(0))
+    net_display = StringVar(value=format_currency(0))
+
     def refresh_totals():
         calculate_sale_totals(cart_tree, summary)
+        gross_display.set(format_currency(float(summary.gross_total.get())))
+        discount_amt_display.set(format_currency(float(summary.discount_amount.get())))
+        tax_amt_display.set(format_currency(float(summary.tax_amount.get())))
+        net_display.set(format_currency(float(summary.net_total.get())))
 
     # -------------------------------------
     # Gross Total
     # -------------------------------------
     Label(totals_frame, text="Gross Total").grid(row=0, column=0, padx=5, pady=5)
     Entry(
-        totals_frame, textvariable=summary.gross_total,
-        width=12, state="readonly", justify="right"
+        totals_frame, textvariable=gross_display,
+        width=16, state="readonly", justify="right"
     ).grid(row=0, column=1, padx=5, pady=5)
 
     # -------------------------------------
@@ -101,8 +111,8 @@ def sales_window():
     # -------------------------------------
     Label(totals_frame, text="Discount Amt").grid(row=0, column=4, padx=5, pady=5)
     Entry(
-        totals_frame, textvariable=summary.discount_amount,
-        width=12, state="readonly", justify="right"
+        totals_frame, textvariable=discount_amt_display,
+        width=16, state="readonly", justify="right"
     ).grid(row=0, column=5, padx=5, pady=5)
 
     # ---------------------------------
@@ -118,8 +128,8 @@ def sales_window():
     # ---------------------------------
     Label(totals_frame, text="Tax Amt").grid(row=1, column=2, padx=5, pady=5)
     Entry(
-        totals_frame, textvariable=summary.tax_amount,
-        width=12, state="readonly", justify="right"
+        totals_frame, textvariable=tax_amt_display, width=16, 
+        state="readonly", justify="right"
     ).grid(row=1, column=3, padx=5, pady=5)
 
     # ---------------------------------
@@ -129,8 +139,8 @@ def sales_window():
         totals_frame, text="Net Total", font=("Arial", 10, "bold")
     ).grid(row=1, column=4, padx=5, pady=5)
     Entry(
-        totals_frame, textvariable=summary.net_total,
-        width=12, state="readonly", justify="right", font=("Arial", 10, "bold")
+        totals_frame, textvariable=net_display, width=16, 
+        state="readonly", justify="right", font=("Arial", 10, "bold")
     ).grid(row=1, column=5, padx=5, pady=5)
 
 # =====================================
@@ -241,6 +251,7 @@ def sales_window():
         fill=BOTH,
         expand=True
     )
+    refresh_totals()  # now cart_tree exists, safe to call
 # ===========================
 #   Customer Field
 # ==========================
@@ -435,6 +446,8 @@ def sales_window():
 
         calculate_sale_totals(cart_tree, summary)
 
+        refresh_totals()
+
         product.set("")
         quantity.set(1)
         sale_price.set(0)
@@ -493,7 +506,7 @@ def sales_history():
 
     history_win = Toplevel()
     history_win.title("Sales History")
-    size_and_center(history_win, width_ratio=0.9, height_ratio=0.75)
+    size_and_center(history_win, width_ratio=0.9, height_ratio=0.75, resizable=True)
     search_frame = LabelFrame(history_win, text="Search Sale", padx=10, pady=10)
     search_frame.pack(fill="x", padx=10, pady=10)
 
@@ -508,7 +521,13 @@ def sales_history():
             history_tree.delete(row)
         rows = get_sales_history(search_term)
         for row in rows:
-            history_tree.insert("", END, values=row)
+            formatted = (
+                row[0], row[1], row[2], row[3],
+                format_currency(row[4]), row[5], format_currency(row[6]),
+                row[7], format_currency(row[8]), format_currency(row[9]),
+                row[10], row[11]
+            )
+            history_tree.insert("", END, values=formatted)
 
     Button(
         search_frame, text="Search", width=12,
@@ -531,7 +550,7 @@ def sales_history():
         columns=(
             "id", "sale_no", "customer", "date",
             "gross_total", "discount", "discount_amount",
-            "tax", "tax_amount", "net_total", "returned_qty"
+            "tax", "tax_amount", "net_total", "quantity", "returned_qty"
         ),
         yscrollcommand=scroll_y.set
     )
@@ -547,6 +566,7 @@ def sales_history():
     history_tree.heading("tax", text="Tax %")
     history_tree.heading("tax_amount", text="Tax Amt")
     history_tree.heading("net_total", text="Net Total")
+    history_tree.heading("quantity", text="Qty")
     history_tree.heading("returned_qty", text="Returned")
 
 
@@ -560,6 +580,7 @@ def sales_history():
     history_tree.column("tax", width=80, anchor=E)
     history_tree.column("tax_amount", width=90, anchor=E)
     history_tree.column("net_total", width=100, anchor=E)
+    history_tree.column("quantity", width=60, anchor=CENTER)
     history_tree.column("returned_qty", width=90, anchor=CENTER)
 
 
@@ -631,18 +652,21 @@ def show_sale_details(sale_id):
     details_tree.pack(fill=BOTH, expand=True)
 
     for product, price, qty, subtotal in get_sale_items(sale_id):
-        details_tree.insert("", "end", values=(product, f"{price:,.2f}", qty, f"{subtotal:,.2f}"))
+        details_tree.insert("", "end", 
+                            values=(product,
+                                    format_currency(price), 
+                                    qty, format_currency(subtotal)))
 
     totals_frame = LabelFrame(details_win, text="Totals", padx=10, pady=10)
     totals_frame.pack(fill="x", padx=10, pady=(0, 10))
 
-    Label(totals_frame, text=f"Gross Total : {gross_total:,.2f}").grid(
+    Label(totals_frame, text=f"Gross Total : {format_currency(gross_total)}").grid(
         row=0, column=0, padx=15, pady=5, sticky="w")
-    Label(totals_frame, text=f"Discount : {discount}%  ({discount_amount:,.2f})").grid(
+    Label(totals_frame, text=f"Discount : {discount}%  ({format_currency(discount_amount)})").grid(
         row=0, column=1, padx=15, pady=5, sticky="w")
-    Label(totals_frame, text=f"Tax : {tax}%  ({tax_amount:,.2f})").grid(
+    Label(totals_frame, text=f"Tax : {tax}%  ({format_currency(tax_amount)})").grid(
         row=0, column=2, padx=15, pady=5, sticky="w")
-    Label(totals_frame, text=f"Net Total : {net_total:,.2f}", font=("Arial", 11, "bold")).grid(
+    Label(totals_frame, text=f"Net Total : {format_currency(net_total)}", font=("Arial", 11, "bold")).grid(
         row=0, column=3, padx=15, pady=5, sticky="w")
 
 # =====================================

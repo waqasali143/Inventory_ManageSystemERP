@@ -1,478 +1,371 @@
 from tkinter import *
 from tkinter import ttk
-import sqlite3
-from tkinter import messagebox
 
-# ===============================================
-# Show Customers
-# ==============================================
-def show_customers(tree):
+from services.customer_service import (
+    load_customers, save_customer, update_customer, delete_customer
+)
+from services.sales_service import get_sales_by_customer
+from services.settings_service import format_currency
+from utils.theme import (
+    PRIMARY, BACKGROUND, WHITE,
+    FONT_TITLE, FONT_BODY, apply_app_style
+)
+from utils.tree_helpers import build_treeview
+from utils.window_helpers import size_and_center
 
-    # Purana data remove
+CUSTOMER_COLUMNS = ("id", "name", "contact", "email", "address", "status")
+
+
+# =====================================
+# Load customers into the tree
+# =====================================
+def refresh_customers(tree, search_term=None):
+
     for row in tree.get_children():
         tree.delete(row)
 
-    conn = sqlite3.connect("database/inventory.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT * FROM customers
-        ORDER BY id DESC
-    """)
-
-    rows = cursor.fetchall()
-
-    conn.close()
+    rows = load_customers(search_term)
 
     for row in rows:
         tree.insert("", END, values=row)
-# ================================================================
 
-def save_customer(name, contact, email, address, tree):
 
-    if (
-        name.get().strip() == "" or
-        contact.get().strip() == ""
-    ):
-        messagebox.showerror(
-            "Error",
-            "Customer Name and Contact are required!"
-        )
-        return
-
-    conn = sqlite3.connect("database/inventory.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        INSERT INTO customers(name, contact, email, address)
-        VALUES (?, ?, ?, ?)
-    """, (
-        name.get().strip(),
-        contact.get().strip(),
-        email.get().strip(),
-        address.get().strip()
-    ))
-
-    conn.commit()
-    conn.close()
-
-    messagebox.showinfo(
-        "Success",
-        "Customer Added Successfully"
-    )
-
-    name.set("")
-    contact.set("")
-    email.set("")
-    address.set("")
-    show_customers(tree)
-# =================================================
-# Update Customer
-# =================================================
-def update_customer(
-    selected_id,
-    name,
-    contact,
-    email,
-    address,
-    tree
-):
-
-    if selected_id.get() == "":
-        messagebox.showerror(
-            "Update",
-            "Please select a customer first."
-        )
-        return
-
-    if (
-        name.get().strip() == "" or
-        contact.get().strip() == ""
-    ):
-        messagebox.showerror(
-            "Error",
-            "Customer Name and Contact are required!"
-        )
-        return
-
-    conn = sqlite3.connect("database/inventory.db")
-    cursor = conn.cursor()
-
-    cursor.execute(""" UPDATE customers SET
-                                  
-            name=?,
-            contact=?,
-            email=?,
-            address=?
-        WHERE id=?
-    """, (
-        name.get().strip(),
-        contact.get().strip(),
-        email.get().strip(),
-        address.get().strip(),
-        selected_id.get()
-    ))
-
-    conn.commit()
-    conn.close()
-
-    messagebox.showinfo(
-        "Success",
-        "Customer Updated Successfully"
-    )
-
-    name.set("")
-    contact.set("")
-    email.set("")
-    address.set("")
-    selected_id.set("")
-
-    show_customers(tree)
-# ================================================
-# Delete Customer
-# ------------------------------------------------
-def delete_customer(selected_id, tree):
-
-    if selected_id.get() == "":
-        messagebox.showerror(
-            "Delete",
-            "Please select a customer first."
-        )
-        return
-
-    confirm = messagebox.askyesno(
-        "Confirm Delete",
-        "Are you sure you want to delete this customer?"
-    )
-
-    if not confirm:
-        return
-
-    conn = sqlite3.connect("database/inventory.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        DELETE FROM customers
-        WHERE id=?
-    """, (
-        selected_id.get(),
-    ))
-
-    conn.commit()
-    conn.close()
-
-    messagebox.showinfo(
-        "Success",
-        "Customer Deleted Successfully"
-    )
-
-    selected_id.set("")
-
-    show_customers(tree)
-# ================================================
-# Clear Fields
-# -----------------------------------------------
-def clear_fields(selected_id,name,contact,email,address,name_entry):
-
-    selected_id.set("")
-
-    name.set("")
-    contact.set("")
-    email.set("")
-    address.set("")
-
-    name_entry.focus_set()    
-# =========================================
-#  Search Customer
-# --------------------------------------
 def search_customer(search, tree):
+    refresh_customers(tree, search.get().strip())
 
-    if search.get().strip() == "":
-        messagebox.showerror(
-            "Search",
-            "Please enter customer name."
-        )
-        return
 
-    # Purana data remove
-    for row in tree.get_children():
-        tree.delete(row)
-
-    conn = sqlite3.connect("database/inventory.db")
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        SELECT * FROM customers
-        WHERE name LIKE ?
-    """, (
-        "%" + search.get().strip() + "%",
-    ))
-
-    rows = cursor.fetchall()
-
-    conn.close()
-
-    if len(rows) == 0:
-        messagebox.showinfo(
-            "Search",
-            "No Customer Found"
-        )
-        return
-
-    for row in rows:
-        tree.insert("", END, values=row)
-# =================================================
-# Select Customer
-# -------------------------------------------------
-def select_customer(event,tree,name,contact,email,address,selected_id):
+# =====================================
+# Pull the selected row into the form fields
+# =====================================
+def select_customer(event, tree, name, contact, email, address, selected_id):
 
     selected = tree.focus()
-
     values = tree.item(selected, "values")
 
-    if values:
+    if not values:
+        return
 
-        selected_id.set(values[0])
-        name.set(values[1])
-        contact.set(values[2])
-        email.set(values[3])
-        address.set(values[4])
-# =================================================
-# ========================================================
+    selected_id.set(values[0])
+    name.set(values[1])
+    contact.set(values[2])
+    email.set(values[3])
+    address.set(values[4])
+
+
+def clear_fields(selected_id, name, contact, email, address, name_entry):
+
+    selected_id.set("")
+    name.set("")
+    contact.set("")
+    email.set("")
+    address.set("")
+
+    name_entry.focus_set()
+
+
+# =====================================
+# Button handlers (wrap service calls + refresh + clear on success)
+# =====================================
+def handle_save(name, contact, email, address, tree):
+    if save_customer(name, contact, email, address):
+        refresh_customers(tree)
+        name.set("")
+        contact.set("")
+        email.set("")
+        address.set("")
+
+
+def handle_update(selected_id, name, contact, email, address, tree):
+    if update_customer(selected_id, name, contact, email, address):
+        refresh_customers(tree)
+        selected_id.set("")
+        name.set("")
+        contact.set("")
+        email.set("")
+        address.set("")
+
+
+def handle_delete(selected_id, tree):
+    if delete_customer(selected_id):
+        refresh_customers(tree)
+        selected_id.set("")
+
+
+# =====================================
+# Main Window
+# =====================================
 def open_window():
 
     win = Toplevel()
-
     win.title("Customer Management")
-
     win.geometry("950x600")
-
     win.resizable(False, False)
-
     win.iconbitmap("assets/ims.ico")
 
-    # ==========================
-    # Variables
-    # ==========================
-
+    # ---------------- Variables ----------------
     search = StringVar()
     name = StringVar()
     contact = StringVar()
     email = StringVar()
     address = StringVar()
     selected_id = StringVar()
-    # ==========================================
-    # Search Frame
-    # ==========================================
-    search_frame = LabelFrame(
-    win,
-    text="Search Customer",
-    padx=10,
-    pady=10
-)
+
+    # ---------------- Search Frame ----------------
+    search_frame = LabelFrame(win, text="Search Customer", padx=10, pady=10)
     search_frame.pack(fill="x", padx=10, pady=10)
 
-    Label(
-        search_frame,
-        text="Customer Name"
-    ).grid(row=0, column=0, padx=5)
+    Label(search_frame, text="Customer Name").grid(row=0, column=0, padx=5)
 
-    Entry(
-        search_frame,
-        textvariable=search,
-        width=30
-    ).grid(row=0, column=1)
+    search_entry = Entry(search_frame, textvariable=search, width=30)
+    search_entry.grid(row=0, column=1)
 
     Button(
-        search_frame,
-        text="Search",
-        width=12,
-        command=lambda: search_customer(
-            search,
-            tree
-        )
+        search_frame, text="Search", width=12,
+        command=lambda: search_customer(search, tree)
     ).grid(row=0, column=2, padx=10)
 
     Button(
-        search_frame,
-        text="Show All",
-        width=12,
-        command=lambda: show_customers(tree)
+        search_frame, text="Show All", width=12,
+        command=lambda: refresh_customers(tree)
     ).grid(row=0, column=3)
-    # ================================================
-    # Customer Details Frame
-    # ================================================
-    customer_frame = LabelFrame(
-    win,
-    text="Customer Details",
-    padx=10,
-    pady=10
-)
+
+    # ---------------- Customer Details Frame ----------------
+    customer_frame = LabelFrame(win, text="Customer Details", padx=10, pady=10)
     customer_frame.pack(fill="x", padx=10)
-    # ======================================================
-    # Fields inside Customer Details Frame
-    # =======================================================
+
     Label(customer_frame, text="Customer Name").grid(row=0, column=0)
-
-    name_entry = Entry(
-    customer_frame,
-    textvariable=name,
-    width=35
-    )
-
-    name_entry.grid(
-        row=0,
-        column=1,
-        padx=10
-    )
+    name_entry = Entry(customer_frame, textvariable=name, width=35)
+    name_entry.grid(row=0, column=1, padx=10)
 
     Label(customer_frame, text="Contact").grid(row=1, column=0)
-
-    Entry(
-        customer_frame,
-        textvariable=contact,
-        width=35
-    ).grid(row=1, column=1, padx=10, pady=5)
+    Entry(customer_frame, textvariable=contact, width=35).grid(row=1, column=1, padx=10, pady=5)
 
     Label(customer_frame, text="Email").grid(row=2, column=0)
-
-    Entry(
-        customer_frame,
-        textvariable=email,
-        width=35
-    ).grid(row=2, column=1, padx=10)
+    Entry(customer_frame, textvariable=email, width=35).grid(row=2, column=1, padx=10)
 
     Label(customer_frame, text="Address").grid(row=3, column=0)
+    Entry(customer_frame, textvariable=address, width=35).grid(row=3, column=1, padx=10, pady=5)
 
-    Entry(
-        customer_frame,
-        textvariable=address,
-        width=35
-    ).grid(row=3, column=1, padx=10, pady=5)
-# ==========================
-# Buttons
-# ==========================
-
+    # ---------------- Buttons ----------------
     button_frame = Frame(customer_frame)
-
-    button_frame.grid(
-        row=4,
-        column=0,
-        columnspan=2,
-        pady=15
-    )
+    button_frame.grid(row=4, column=0, columnspan=2, pady=15)
 
     Button(
-        button_frame,
-        text="Save",
-        width=10,
-        command=lambda:save_customer(
-            name,
-            contact,
-            email,
-            address,
-            tree
-        )
+        button_frame, text="Save", width=10,
+        command=lambda: handle_save(name, contact, email, address, tree)
     ).grid(row=0, column=0, padx=5)
 
     Button(
-        button_frame,
-        text="Update",
-        width=10,
-        command=lambda: update_customer(
-            selected_id,
-            name,
-            contact,
-            email,
-            address,
-            tree
-        )
+        button_frame, text="Update", width=10,
+        command=lambda: handle_update(selected_id, name, contact, email, address, tree)
     ).grid(row=0, column=1, padx=5)
 
     Button(
-        button_frame,
-        text="Delete",
-        width=10,
-        command=lambda: delete_customer(
-            selected_id,
-            tree
-        )
+        button_frame, text="Delete", width=10,
+        command=lambda: handle_delete(selected_id, tree)
     ).grid(row=0, column=2, padx=5)
 
     Button(
-        button_frame,
-        text="Clear",
-        width=10,
-        command=lambda: clear_fields(
-            selected_id,
-            name,
-            contact,
-            email,
-            address,
-            name_entry
-        )
+        button_frame, text="Clear", width=10,
+        command=lambda: clear_fields(selected_id, name, contact, email, address, name_entry)
     ).grid(row=0, column=3, padx=5)
-# ==========================
-# Customer Table
-# ==========================
 
+    Button(
+        button_frame, text="Sales History", width=14,
+        command=lambda: open_customer_sales_history(selected_id, name)
+    ).grid(row=0, column=4, padx=5)
+
+    # ---------------- Customer Table ----------------
     table_frame = Frame(win)
-
-    table_frame.pack(
-        fill=BOTH,
-        expand=True,
-        padx=10,
-        pady=10
-    )
+    table_frame.pack(fill=BOTH, expand=True, padx=10, pady=10)
 
     scrollbar_y = Scrollbar(table_frame)
-
-    scrollbar_y.pack(
-        side=RIGHT,
-        fill=Y
-    )
+    scrollbar_y.pack(side=RIGHT, fill=Y)
 
     tree = ttk.Treeview(
         table_frame,
-        columns=(
-            "ID",
-            "Name",
-            "Contact",
-            "Email",
-            "Address"
-        ),
+        columns=CUSTOMER_COLUMNS,
         show="headings",
         yscrollcommand=scrollbar_y.set
     )
-
     scrollbar_y.config(command=tree.yview)
 
-    tree.heading("ID", text="ID")
-    tree.heading("Name", text="Customer Name")
-    tree.heading("Contact", text="Contact")
-    tree.heading("Email", text="Email")
-    tree.heading("Address", text="Address")
+    tree.heading("id", text="ID")
+    tree.heading("name", text="Customer Name")
+    tree.heading("contact", text="Contact")
+    tree.heading("email", text="Email")
+    tree.heading("address", text="Address")
+    tree.heading("status", text="Status")
 
-    tree.column("ID", width=70)
-    tree.column("Name", width=220)
-    tree.column("Contact", width=150)
-    tree.column("Email", width=220)
-    tree.column("Address", width=250)
+    tree.column("id", width=60, anchor=CENTER, stretch=False)
+    tree.column("name", width=200, stretch=False)
+    tree.column("contact", width=140, stretch=False)
+    tree.column("email", width=200, stretch=False)
+    tree.column("address", width=220, stretch=True)
+    tree.column("status", width=90, anchor=CENTER, stretch=False)
 
     tree.pack(fill=BOTH, expand=True)
-    # ---This code part of Select Customer----
+
     tree.bind(
-    "<<TreeviewSelect>>",
-    lambda event: select_customer(
-        event,
-        tree,
-        name,
-        contact,
-        email,
-        address,
-        selected_id
+        "<<TreeviewSelect>>",
+        lambda event: select_customer(event, tree, name, contact, email, address, selected_id)
     )
-)
-# ---------------------------------------
-    show_customers(tree)
+# ==========================================================
+# =====  Function Customer Sales history  =========
+# ===========================================================
+    def open_customer_sales_history(selected_id, name):
+
+        if not selected_id.get():
+            from tkinter import messagebox
+            messagebox.showerror("Error", "Please select a customer first.")
+            return
+
+        win = Toplevel()
+        win.title(f"Sales History - {name.get()}")
+        size_and_center(win, width_ratio=0.60, height_ratio=0.55, resizable=True)
+
+        apply_app_style()
+
+        # ---------------- Header ----------------
+        header_frame = Frame(win, bg=PRIMARY, height=60)
+        header_frame.pack(fill=X)
+        header_frame.pack_propagate(False)
+
+        Label(
+            header_frame, text=f"Sales History — {name.get()}",
+            bg=PRIMARY, fg=WHITE, font=FONT_TITLE
+        ).pack(side=LEFT, padx=20)
+
+        # ---------------- Table ----------------
+        table_frame = Frame(win, bg=BACKGROUND)
+        table_frame.pack(fill=BOTH, expand=True, padx=15, pady=15)
+
+        scroll_y = Scrollbar(table_frame, orient=VERTICAL)
+        scroll_y.pack(side=RIGHT, fill=Y)
+
+        tree = build_treeview(table_frame, SALES_HISTORY_COLUMNS)
+        tree.configure(yscrollcommand=scroll_y.set)
+        scroll_y.config(command=tree.yview)
+        tree["displaycolumns"] = (
+            "sale_no", "date", "gross_total", "discount_amount", "tax_amount", "net_total"
+        )
+        tree.pack(fill=BOTH, expand=True)
+
+        rows = get_sales_by_customer(selected_id.get())
+
+        total_purchased = 0.0
+        for row in rows:
+            formatted_row = (
+                row[0], row[1], row[2],
+                format_currency(row[3]), format_currency(row[4]),
+                format_currency(row[5]), format_currency(row[6])
+            )
+            tree.insert("", "end", values=formatted_row)
+            total_purchased += row[6]
+
+        if not rows:
+            Label(
+                table_frame, text="No sales found for this customer.",
+                bg=BACKGROUND, fg="gray", font=FONT_BODY
+            ).pack(pady=10)
+
+        # ---------------- Total (highlighted bar) ----------------
+        total_frame = Frame(win, bg="#0B3B63", height=55)
+        total_frame.pack(side=BOTTOM, fill=X, padx=30, pady=(0, 15))
+        total_frame.pack_propagate(False)
+
+        Label(
+            total_frame, text="TOTAL PURCHASED BY THIS CUSTOMER",
+            bg="#0B3B63", fg=WHITE, font=FONT_BODY
+        ).pack(side=LEFT, padx=20)
+
+        Label(
+            total_frame, text=format_currency(total_purchased),
+            bg="#0B3B63", fg=WHITE, font=("Segoe UI", 16, "bold")
+        ).pack(side=RIGHT, padx=20)
+
+    refresh_customers(tree)
     name_entry.focus_set()
+# =====================================
+# Customer Sales History Window
+# =====================================
+SALES_HISTORY_COLUMNS = [
+    {"key": "id", "heading": "ID", "width": 0},
+    {"key": "sale_no", "heading": "Sale No", "width": 120, "stretch": False},
+    {"key": "date", "heading": "Date", "width": 170, "stretch": False},
+    {"key": "gross_total", "heading": "Gross Total", "width": 110, "anchor": E, "stretch": False},
+    {"key": "discount_amount", "heading": "Discount Amt", "width": 120, "anchor": E, "stretch": False},
+    {"key": "tax_amount", "heading": "Tax Amt", "width": 110, "anchor": E, "stretch": True},
+    {"key": "net_total", "heading": "Net Total", "width": 130, "anchor": E, "stretch": False},
+]
+
+def open_customer_sales_history(selected_id, name):
+
+    if not selected_id.get():
+        from tkinter import messagebox
+        messagebox.showerror("Error", "Please select a customer first.")
+        return
+
+    win = Toplevel()
+    win.title(f"Sales History - {name.get()}")
+    size_and_center(win, width_ratio=0.45, height_ratio=0.55, resizable=True)
+
+    apply_app_style()
+
+    # ---------------- Header ----------------
+    header_frame = Frame(win, bg=PRIMARY, height=60)
+    header_frame.pack(fill=X)
+    header_frame.pack_propagate(False)
+
+    Label(
+        header_frame, text=f"Sales History — {name.get()}",
+        bg=PRIMARY, fg=WHITE, font=FONT_TITLE
+    ).pack(side=LEFT, padx=20)
+
+    # ---------------- Table ----------------
+    table_frame = Frame(win, bg=BACKGROUND)
+    table_frame.pack(fill=BOTH, expand=True, padx=15, pady=15)
+
+    scroll_y = Scrollbar(table_frame, orient=VERTICAL)
+    scroll_y.pack(side=RIGHT, fill=Y)
+
+    tree = build_treeview(table_frame, SALES_HISTORY_COLUMNS)
+    tree.configure(yscrollcommand=scroll_y.set)
+    scroll_y.config(command=tree.yview)
+    tree["displaycolumns"] = (
+        "sale_no", "date", "gross_total", "discount_amount", "tax_amount", "net_total"
+    )
+    tree.pack(fill=BOTH, expand=True)
+
+    rows = get_sales_by_customer(selected_id.get())
+
+    total_purchased = 0.0
+    for row in rows:
+        formatted_row = (
+            row[0], row[1], row[2],
+            format_currency(row[3]), format_currency(row[4]),
+            format_currency(row[5]), format_currency(row[6])
+        )
+        tree.insert("", "end", values=formatted_row)
+        total_purchased += row[6]
+
+    if not rows:
+        Label(
+            table_frame, text="No sales found for this customer.",
+            bg=BACKGROUND, fg="gray", font=FONT_BODY
+        ).pack(pady=10)
+
+    # ---------------- Total (highlighted bar) ----------------
+    total_frame = Frame(win, bg="#0B3B63", height=55)
+    total_frame.pack(side=BOTTOM, fill=X, padx=30, pady=(0, 15))
+    total_frame.pack_propagate(False)
+
+    Label(
+        total_frame, text="TOTAL PURCHASED BY THIS CUSTOMER",
+        bg="#0B3B63", fg=WHITE, font=FONT_BODY
+    ).pack(side=LEFT, padx=20)
+
+    Label(
+        total_frame, text=format_currency(total_purchased),
+        bg="#0B3B63", fg=WHITE, font=("Segoe UI", 16, "bold")
+    ).pack(side=RIGHT, padx=20)

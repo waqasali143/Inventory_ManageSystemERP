@@ -62,6 +62,26 @@ def connect():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
+# =====================================
+# Settings Table
+# (key-value store for system-wide settings like currency,
+#  business name, etc. - one row per setting)
+# =====================================
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS settings(
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    )
+    """)
+
+    cursor.execute("""
+        SELECT value FROM settings WHERE key = 'currency'
+    """)
+
+    if cursor.fetchone() is None:
+        cursor.execute("""
+            INSERT INTO settings(key, value) VALUES ('currency', 'Rs')
+        """)
 # ===================================================================
 
     cursor.execute("""

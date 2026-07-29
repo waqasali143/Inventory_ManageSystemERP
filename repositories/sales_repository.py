@@ -148,6 +148,11 @@ def fetch_sales_history(search_term=None):
             s.gross_total, s.discount, s.discount_amount,
             s.tax, s.tax_amount, s.net_total,
             COALESCE((
+                SELECT SUM(si.quantity)
+                FROM sale_items si
+                WHERE si.sale_id = s.id
+            ), 0) AS total_quantity,
+            COALESCE((
                 SELECT SUM(sr.quantity)
                 FROM sale_returns sr
                 WHERE sr.sale_id = s.id
@@ -308,6 +313,25 @@ def fetch_all_sale_returns(today_only=False):
         )
     else:
         cursor.execute(base_query + " ORDER BY sr.id DESC")
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows
+# =========================================================
+def fetch_sales_by_customer(customer_id):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            s.id, s.sale_no, s.sale_date,
+            s.gross_total, s.discount_amount, s.tax_amount, s.net_total
+        FROM sales s
+        WHERE s.customer_id = ?
+        ORDER BY s.id DESC
+    """, (customer_id,))
 
     rows = cursor.fetchall()
     conn.close()

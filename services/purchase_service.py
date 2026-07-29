@@ -53,10 +53,15 @@ def resolve_purchase_date(purchase_date_str):
 def get_purchase_items(purchase_id):
     return repo.fetch_purchase_items(purchase_id)
 # =====================================
-# Return History (admin-facing summary of all returns)
+# Return History (admin-facing summary of all returns) wrapper
 # =====================================
 def get_all_purchase_returns(today_only=False):
     return repo.fetch_all_purchase_returns(today_only)
+# =====================================
+# Supplier-wise Purchase History wrapper
+# =====================================
+def get_purchases_by_supplier(supplier_id):
+    return repo.fetch_purchases_by_supplier(supplier_id)
 # =====================================
 # Purchase Validation
 # =====================================
