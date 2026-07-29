@@ -222,7 +222,7 @@ def open_window():
 
         win = Toplevel()
         win.title(f"Sales History - {name.get()}")
-        size_and_center(win, width_ratio=0.60, height_ratio=0.55, resizable=True)
+        size_and_center(win, width_ratio=0.7, height_ratio=0.7, resizable=True)
 
         apply_app_style()
 

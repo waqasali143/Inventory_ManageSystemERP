@@ -513,7 +513,7 @@ def sales_history():
     Label(search_frame, text="Sale No").grid(row=0, column=0, padx=5)
     sale_search = StringVar()
     Entry(search_frame, textvariable=sale_search, width=30).grid(row=0, column=1, padx=5)
-
+    
     history_tree = None
 
     def load_history(search_term=None):

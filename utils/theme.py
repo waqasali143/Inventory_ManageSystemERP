@@ -86,7 +86,45 @@ def apply_app_style():
         foreground=TEXT,
         padding=6
     )
+# ---------------- Currency Selector (style: blends into header) ----------------
+    style.configure(
+        "HeaderCurrency.TCombobox",
+        fieldbackground=PRIMARY,
+        background=PRIMARY,
+        foreground=WHITE,
+        arrowcolor=WHITE,
+        bordercolor=PRIMARY,
+        padding=6,
+        relief="flat",
+        borderwidth=0,
+        font=(FONT_FAMILY, 12, "bold")
+    )
+    style.map(
+        "HeaderCurrency.TCombobox",
+        fieldbackground=[("readonly", PRIMARY)],
+        background=[("readonly", PRIMARY)],
+        bordercolor=[("readonly", PRIMARY)]
+    )
 
+    # ---------------- Currency Selector (hover state) ----------------
+    style.configure(
+        "HeaderCurrencyHover.TCombobox",
+        fieldbackground=PRIMARY_DARK,
+        background=PRIMARY_DARK,
+        foreground=WHITE,
+        arrowcolor=WHITE,
+        bordercolor=PRIMARY_DARK,
+        padding=6,
+        relief="flat",
+        borderwidth=0,
+        font=(FONT_FAMILY, 12, "bold")
+    )
+    style.map(
+        "HeaderCurrencyHover.TCombobox",
+        fieldbackground=[("readonly", PRIMARY_DARK)],
+        background=[("readonly", PRIMARY_DARK)],
+        bordercolor=[("readonly", PRIMARY_DARK)]
+    )
 # =====================================================================
 # Call this after inserting rows into any Treeview to get
 # alternating (striped) row colors - big readability upgrade.

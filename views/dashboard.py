@@ -21,8 +21,8 @@ import sqlite3
 
 from utils import event_bus
 
-from views.sales import sales_window, open_sale_return_history_window
-from views.purchase import purchase_window, open_return_history_window
+from views.sales import sales_window, open_sale_return_history_window, sales_history
+from views.purchase import purchase_window, open_return_history_window, purchase_history
 
 from utils.theme import (
     PRIMARY, PRIMARY_DARK, SIDEBAR, SIDEBAR_ACTIVE, BACKGROUND,
@@ -133,30 +133,33 @@ class Dashboard:
         )
         self.refresh_btn.pack(side=RIGHT, padx=(0, 15))
 # ===========================================================
-# CURRENCY SELECTOR
+# CURRENCY SELECTOR (-style: invisible until hover)
 # ===========================================================
     def create_currency_selector(self):
 
-        currency_frame = Frame(self.header, bg=PRIMARY)
-        currency_frame.pack(side=RIGHT, padx=(0, 15))
-
-        Label(
-            currency_frame, text="Currency:",
-            bg=PRIMARY, fg=WHITE, font=FONT_BODY
-        ).pack(side=LEFT, padx=(0, 5))
-
         self.currency_var = StringVar(value=get_currency())
 
-        currency_dropdown = ttk.Combobox(
-            currency_frame, textvariable=self.currency_var,
+        self.currency_dropdown = ttk.Combobox(
+            self.header, textvariable=self.currency_var,
             values=["Rs", "$", "€", "£", "₹"],
-            width=5, state="readonly"
+            width=5, state="readonly",
+            style="HeaderCurrency.TCombobox"
         )
-        currency_dropdown.pack(side=LEFT)
+        self.currency_dropdown.pack(side=RIGHT, padx=(0, 20), pady=20)
 
-        currency_dropdown.bind(
+        self.currency_dropdown.bind(
             "<<ComboboxSelected>>",
             lambda event: self.on_currency_change()
+        )
+
+        # ---- Hover: highlight background appears ----
+        self.currency_dropdown.bind(
+            "<Enter>",
+            lambda e: self.currency_dropdown.configure(style="HeaderCurrencyHover.TCombobox")
+        )
+        self.currency_dropdown.bind(
+            "<Leave>",
+            lambda e: self.currency_dropdown.configure(style="HeaderCurrency.TCombobox")
         )
 
     def on_currency_change(self):
@@ -812,6 +815,28 @@ class Dashboard:
 
         return btn
 # ===========================================================
+# REPORTS & HISTORY DROPDOWN
+# ===========================================================
+    def create_reports_menu(self):
+
+        menu_btn = Menubutton(
+            self.sidebar, text="📊 Reports & History  ▾",
+            bg=SIDEBAR, fg=WHITE, font=FONT_BODY_BOLD,
+            activebackground=PRIMARY, activeforeground=WHITE,
+            relief=FLAT, bd=0, anchor="w", padx=20,
+            cursor="hand2"
+        )
+        menu_btn.pack(fill=X, ipady=12)
+
+        reports_menu = Menu(menu_btn, tearoff=0)
+        reports_menu.add_command(label="💰 Sales History", command=sales_history)
+        reports_menu.add_command(label="🛒 Purchase History", command=purchase_history)
+        reports_menu.add_separator()
+        reports_menu.add_command(label="↩ Sales Returns", command=open_sale_return_history_window)
+        reports_menu.add_command(label="↩ Purchase Returns", command=open_return_history_window)
+
+        menu_btn.config(menu=reports_menu)
+# ===========================================================
 # SET ACTIVE SIDEBAR
 # ===========================================================
     def set_active_sidebar(self, key):
@@ -865,17 +890,7 @@ class Dashboard:
             key="reports"
         )
 
-        self.sidebar_button(
-            "↩ Sales Returns",
-            open_sale_return_history_window,
-            key="sales_returns"
-        )
-
-        self.sidebar_button(
-            "↩ Purchase Returns",
-            open_return_history_window,
-            key="purchase_returns"
-        )
+        self.create_reports_menu()
         
         self.sidebar_button(
             "🚪 Logout",

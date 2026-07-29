@@ -28,7 +28,7 @@ def fetch_active_products():
 
     cursor.execute("""
         SELECT id, name FROM products
-        WHERE status='Active'
+        WHERE status != 'Inactive'
         ORDER BY name
     """)
 
