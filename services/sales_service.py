@@ -125,7 +125,13 @@ def _extract_cart_items(cart_tree):
         quantity = int(values[3])
         subtotal = float(values[4])
 
-        items.append((product_id, sale_price, quantity, subtotal))
+        # capture the product's cost right now, at sale time -
+        # this "freezes" the cost so future price changes never
+        # distort past reports (this is the future-proofing step)
+        details = repo.fetch_product_details(product_id)
+        cost_price = details[2] if details else 0
+
+        items.append((product_id, sale_price, cost_price, quantity, subtotal))
 
     return items
 
@@ -146,7 +152,7 @@ def save_sale(customer, cart_tree, summary):
 
     cart_items = _extract_cart_items(cart_tree)
 
-    for product_id, _price, quantity, _subtotal in cart_items:
+    for product_id, _price, _cost, quantity, _subtotal in cart_items:
         details = repo.fetch_product_details(product_id)
         current_stock = details[1] if details else 0
 
@@ -174,7 +180,7 @@ def save_sale(customer, cart_tree, summary):
 
         repo.insert_sale_items(cursor, sale_id, cart_items)
 
-        for product_id, _price, quantity, _subtotal in cart_items:
+        for product_id, _price, _cost, quantity, _subtotal in cart_items:
             repo.decrement_product_stock(cursor, product_id, quantity)
 
         conn.commit()

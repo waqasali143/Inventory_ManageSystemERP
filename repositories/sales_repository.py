@@ -36,16 +36,15 @@ def fetch_active_products():
     conn.close()
 
     return products
-
-
+# =====================================================================
 def fetch_product_details(product_id):
-    """Returns (sale_price, quantity) for a product."""
+    """Returns (sale_price, quantity, cost_price) for a product."""
 
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT sale_price, quantity
+        SELECT sale_price, quantity, cost_price
         FROM products
         WHERE id = ?
     """, (product_id,))
@@ -54,8 +53,7 @@ def fetch_product_details(product_id):
     conn.close()
 
     return row
-
-
+# =============================================================================
 def fetch_customer_id(customer_name):
 
     conn = get_connection()
@@ -113,20 +111,18 @@ def insert_sale_header(
     ))
 
     return cursor.lastrowid
-
-
+# ====================================================================================
 def insert_sale_items(cursor, sale_id, items):
-    """items: list of tuples -> (product_id, sale_price, quantity, subtotal)"""
+    """items: list of tuples -> (product_id, sale_price, cost_price, quantity, subtotal)"""
 
-    for product_id, sale_price, quantity, subtotal in items:
+    for product_id, sale_price, cost_price, quantity, subtotal in items:
         cursor.execute("""
             INSERT INTO sale_items(
-                sale_id, product_id, sale_price, quantity, subtotal
+                sale_id, product_id, sale_price, cost_price, quantity, subtotal
             )
-            VALUES (?, ?, ?, ?, ?)
-        """, (sale_id, product_id, sale_price, quantity, subtotal))
-
-
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (sale_id, product_id, sale_price, cost_price, quantity, subtotal))
+# ----------------------------------------------------------------------------------------
 def decrement_product_stock(cursor, product_id, quantity):
 
     cursor.execute("""

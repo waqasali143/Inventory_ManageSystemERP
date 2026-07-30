@@ -13,10 +13,12 @@ except ImportError:
 
 from datetime import datetime
 from time import strftime
-from services.settings_service import get_currency, set_currency
+from services.settings_service import get_currency, set_currency, format_currency
 from views import product
 from views import supplier
 from views import customer
+from views import expense
+from views.report import open_report_window
 import sqlite3
 
 from utils import event_bus
@@ -544,7 +546,7 @@ class Dashboard:
             "📊",
             "Reports",
             "View Reports",
-            lambda: None
+            command=open_report_window
         )
 # ===========================================================
 # DASHBOARD PANELS
@@ -721,22 +723,23 @@ class Dashboard:
                 *self.sales_tree.get_children()
             )
             cur.execute("""
-            SELECT sale_no,
-                customer_id,
-                net_total
-            FROM sales
-            ORDER BY id DESC
+            SELECT s.sale_no,
+                c.name,
+                s.net_total
+            FROM sales s
+            INNER JOIN customers c ON s.customer_id = c.id
+            ORDER BY s.id DESC
             LIMIT 10
             """)
             rows = cur.fetchall()
 
-            for row in rows:
+            for sale_no, customer_name, net_total in rows:
                 self.sales_tree.insert(
                     "",
                     END,
-                    values=row
+                    values=(sale_no, customer_name, format_currency(net_total))
                 )
-            stripe_treeview(self.sales_tree)
+            stripe_treeview(self.sales_tree)    
 # -----------------------------------------
 # Low Stock Products
 # -----------------------------------------
@@ -820,7 +823,7 @@ class Dashboard:
     def create_reports_menu(self):
 
         menu_btn = Menubutton(
-            self.sidebar, text="📊 Reports & History  ▾",
+            self.sidebar, text="📊  History Reports  ▾",
             bg=SIDEBAR, fg=WHITE, font=FONT_BODY_BOLD,
             activebackground=PRIMARY, activeforeground=WHITE,
             relief=FLAT, bd=0, anchor="w", padx=20,
@@ -834,7 +837,7 @@ class Dashboard:
         reports_menu.add_separator()
         reports_menu.add_command(label="↩ Sales Returns", command=open_sale_return_history_window)
         reports_menu.add_command(label="↩ Purchase Returns", command=open_return_history_window)
-
+        
         menu_btn.config(menu=reports_menu)
 # ===========================================================
 # SET ACTIVE SIDEBAR
@@ -872,7 +875,11 @@ class Dashboard:
             supplier.open_window,
             key="suppliers"
         )
-
+        self.sidebar_button(
+            "💸 Expenses", 
+            expense.open_window, 
+            key="expenses"
+            )
         self.sidebar_button(
             "💰 Sales",
             sales_window,
@@ -887,9 +894,9 @@ class Dashboard:
 
         self.sidebar_button(
             "📊 Reports",
+            command=open_report_window,
             key="reports"
         )
-
         self.create_reports_menu()
         
         self.sidebar_button(

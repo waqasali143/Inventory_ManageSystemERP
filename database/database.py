@@ -335,6 +335,7 @@ def connect():
             sale_id INTEGER NOT NULL,
             product_id INTEGER NOT NULL,
             sale_price REAL NOT NULL,
+            cost_price REAL NOT NULL DEFAULT 0,
             quantity INTEGER NOT NULL,
             subtotal REAL NOT NULL,
             FOREIGN KEY (sale_id)
@@ -343,7 +344,46 @@ def connect():
             REFERENCES products(id)
         )
     """)
-# -------------------------------------------------------------
+
+# =====================================
+# Sale Items Migration
+# (adds cost_price to an already-existing table, and backfills old
+#  rows using each product's current cost - best-effort for old data)
+# =====================================
+    sale_items_columns = [
+        row[1] for row in cursor.execute(
+            "PRAGMA table_info(sale_items)"
+        ).fetchall()
+    ]
+
+    if "cost_price" not in sale_items_columns:
+        cursor.execute(
+            "ALTER TABLE sale_items ADD COLUMN cost_price REAL NOT NULL DEFAULT 0"
+        )
+        cursor.execute("""
+            UPDATE sale_items
+            SET cost_price = (
+                SELECT cost_price FROM products
+                WHERE products.id = sale_items.product_id
+            )
+            WHERE cost_price = 0
+        """)
+# =============================================================
+# ------------  Expenses Table  ---------------------------
+# ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS expenses
+        (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            amount REAL NOT NULL,
+            expense_date TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+# ---------------------------------------------
+# ----------------
     conn.commit()
 
     conn.close()
