@@ -17,6 +17,7 @@ from utils.tree_helpers import build_treeview, reload_treeview
 from utils.ui_helpers import add_buttons, labeled_entry
 from utils.window_helpers import size_and_center
 from utils.barcode_helpers import create_scan_entry
+from utils.shortcut_helper import bind_shortcuts
 PRODUCT_COLUMNS = [
     {"key": "id", "heading": "ID", "width": 60, "anchor": CENTER, "stretch": False},
     {"key": "name", "heading": "Product Name", "width": 260, "stretch": True},
@@ -277,6 +278,24 @@ def open_window():
                                             quantity_entry, quantity_hint, 
                                             cost_price_entry, cost_price_hint, barcode)
     )
+    
+# ==================================================================
+#   Keyboard Shortcuts
+#   F2 = Save (new record) or Update (if a row is selected),
+#   Escape = Close window
+# ================================================================
+    def handle_f2():
+        if selected_id.get():
+            handle_update(selected_id, name, cost_price, sale_price, quantity, tree,
+                           quantity_entry, quantity_hint, cost_price_entry, cost_price_hint, barcode)
+        else:
+            handle_save(selected_id, name, cost_price, sale_price, quantity, tree,
+                         quantity_entry, quantity_hint, cost_price_entry, cost_price_hint, barcode)
+
+    bind_shortcuts(win, {
+        "<F2>": handle_f2,
+        "<Escape>": win.destroy,
+    })
 # ==============================================================================
     refresh_products(tree)
     name_entry_widget = product_frame.grid_slaves(row=0, column=1)

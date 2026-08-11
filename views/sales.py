@@ -20,6 +20,7 @@ from services.sales_service import (
 )
 from services.settings_service import format_currency
 from services.invoice_service import generate_sale_invoice, generate_sales_report_pdf
+from utils.shortcut_helper import bind_shortcuts
 from services.customer_service import get_customer_filer_status
 from services.tax_service import get_applicable_tax_rate
 
@@ -259,6 +260,14 @@ def sales_window():
         expand=True
     )
     refresh_totals()  # now cart_tree exists, safe to call
+
+# ===========================
+#   Keyboard Shortcut
+#   Delete (while cart_tree has focus) = Remove selected cart item.
+#   Bound on cart_tree itself, not the window - so it never fires
+#   while the user is deleting text inside a normal Entry field.
+# ===========================
+    cart_tree.bind("<Delete>", lambda event: remove_cart_item(cart_tree, summary))
 # ===========================
 #   Customer Field
 # ==========================
@@ -380,11 +389,12 @@ def sales_window():
     )
     quantity = IntVar(value=1)
 
-    Entry(
+    quantity_entry = Entry(
         sales_frame,
         textvariable=quantity,
         width=15
-    ).grid(
+    )
+    quantity_entry.grid(
         row=1,
         column=1,
         padx=5,
@@ -501,12 +511,42 @@ def sales_window():
         available_stock.set(0)
 
 # ===========================
+#   Keyboard Shortcut
+#   Enter (while typing Quantity) = Add To Cart, same as clicking
+#   the button - lets a cashier scan/select, type qty, hit Enter
+# ===========================
+    quantity_entry.bind("<Return>", lambda event: add_to_cart())
+
+# ===========================
 #   Save Handler
 # ===========================
     def handle_save():
         if save_sale(customer, cart_tree, summary):
             clear_sale_form(customer, product, quantity, sale_price, 
                             available_stock, cart_tree, summary)
+
+# ===========================
+#   Keyboard Shortcuts
+#   F2 = Save Sale, F3 = New Sale (same actions as the buttons below,
+#   just faster for cashiers who don't want to reach for the mouse)
+# ===========================
+    def handle_escape():
+        if cart_tree.get_children():
+            confirm = messagebox.askyesno(
+                "Unsaved Sale",
+                "This sale hasn't been saved yet. Close anyway?"
+            )
+            if not confirm:
+                return
+        win.destroy()
+
+    bind_shortcuts(win, {
+        "<F2>": handle_save,
+        "<F3>": lambda: clear_sale_form(
+            customer, product, quantity, sale_price, available_stock, cart_tree, summary
+        ),
+        "<Escape>": handle_escape,
+    })
 # ===========================
 #   Buttons
 # ==========================
@@ -625,6 +665,14 @@ def sales_history():
             return
         values = history_tree.item(selected, "values")
         generate_sale_invoice(values[0])
+
+# ===========================
+#   Keyboard Shortcut
+#   Ctrl+P = Print the currently selected sale's invoice
+# ===========================
+    bind_shortcuts(history_win, {
+        "<Control-p>": print_selected_invoice,
+    })
 # ==============================================================================
 
     Label(search_frame, text="Sale No").grid(row=0, column=0, padx=5)
@@ -678,12 +726,12 @@ def sales_history():
     history_tree.heading("sale_no", text="Sale No")
     history_tree.heading("customer", text="Customer")
     history_tree.heading("date", text="Date")
-    history_tree.heading("gross_total", text="Gross Total",anchor=E)
+    history_tree.heading("gross_total", text="Gross Total")
     history_tree.heading("discount", text="Discount %")
-    history_tree.heading("discount_amount", text="Discount Amt", anchor=E)
-    history_tree.heading("tax", text="Tax %", anchor=E)
-    history_tree.heading("tax_amount", text="Tax Amt", anchor=E)
-    history_tree.heading("net_total", text="Net Total", anchor=E)
+    history_tree.heading("discount_amount", text="Discount Amt")
+    history_tree.heading("tax", text="Tax %")
+    history_tree.heading("tax_amount", text="Tax Amt")
+    history_tree.heading("net_total", text="Net Total")
     history_tree.heading("quantity", text="Qty")
     history_tree.heading("returned_qty", text="Returned")
 

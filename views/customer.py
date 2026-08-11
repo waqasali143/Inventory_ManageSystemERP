@@ -11,6 +11,7 @@ from utils.theme import (
     FONT_TITLE, FONT_BODY, apply_app_style
 )
 from utils.branding_helpers import add_branding_strip
+from utils.shortcut_helper import bind_shortcuts
 
 from services.invoice_service import generate_customer_statement
 from utils.tree_helpers import build_treeview
@@ -231,6 +232,21 @@ def open_window():
         "<<TreeviewSelect>>",
         lambda event: select_customer(event, tree, name, contact, email, address, selected_id, ntn, is_filer)
     )
+# =============================================================
+#   Keyboard Shortcuts
+#   F2 = Save (new record) or Update (if a row is selected),
+#   Escape = Close window
+# ==============================================================
+    def handle_f2():
+        if selected_id.get():
+            handle_update(selected_id, name, contact, email, address, tree, ntn, is_filer)
+        else:
+            handle_save(name, contact, email, address, tree, ntn, is_filer)
+
+    bind_shortcuts(win, {
+        "<F2>": handle_f2,
+        "<Escape>": win.destroy,
+    })
 # ==========================================================
 # =====  Function Customer Sales history  =========
 # ===========================================================

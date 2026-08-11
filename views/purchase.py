@@ -17,6 +17,7 @@ from utils.branding_helpers import add_branding_strip
 # from repositories import purchase_repository as repo
 from utils.tree_helpers import build_treeview, reload_treeview
 from utils.ui_helpers import add_buttons, labeled_entry, labeled_date_picker
+from utils.shortcut_helper import bind_shortcuts
 
 from services.invoice_service import generate_purchase_receipt, generate_purchase_report_pdf
 
@@ -24,7 +25,7 @@ from services.settings_service import format_currency
 from services.purchase_summary import PurchaseSummary
 from utils.window_helpers import size_and_center
 from services.purchase_service import (
-    calculate_purchase_totals, remove_cart_item, clear_cart, save_purchase, 
+    calculate_purchase_totals, remove_cart_item, clear_cart, clear_purchase_form, save_purchase, 
     load_suppliers, get_supplier_id_by_name, load_products, get_product_cost_price, 
     get_product_stock, get_purchase_history, get_purchase_header, get_purchase_items,
     get_purchase_items_for_return, process_purchase_return,get_all_purchase_returns
@@ -414,6 +415,48 @@ def purchase_window():
         line_total.set("0.00")
         current_stock.set("0")
         stock_after_purchase.set("0")
+# ========================================================
+#   New Purchase Handler (F3)
+#   Same reset as a successful save, minus the actual saving -
+#   mirrors handle_save_purchase's field clearing below.
+# ===========================================================
+    def handle_new_purchase():
+        clear_purchase_form(supplier, cart_tree, summary)
+        invoice_no.set("")
+        product.set("")
+        purchase_price.set("")
+        quantity.set("")
+        line_total.set("0.00")
+        current_stock.set("0")
+        stock_after_purchase.set("0")
+
+# ===========================
+#   Escape Handler
+#   Confirms before closing if the cart still has unsaved items,
+#   same safeguard as Sales.
+# ===========================
+    def handle_escape():
+        if cart_tree.get_children():
+            confirm = messagebox.askyesno(
+                "Unsaved Purchase",
+                "This purchase hasn't been saved yet. Close anyway?"
+            )
+            if not confirm:
+                return
+        win.destroy()
+
+# ===========================
+#   Keyboard Shortcuts
+#   F2 = Save Purchase, F3 = New Purchase, Escape = Close (with
+#   confirm), Delete (cart selected) = Remove Item, Enter (in
+#   Quantity) = Add To Cart
+# ===========================
+    bind_shortcuts(win, {
+        "<F2>": handle_save_purchase,
+        "<F3>": handle_new_purchase,
+        "<Escape>": handle_escape,
+    })
+    cart_tree.bind("<Delete>", lambda event: remove_cart_item(cart_tree, summary))
     # =====================================
     # Purchase Summary
     # =====================================
@@ -598,6 +641,18 @@ def purchase_window():
         lambda event:(
             calculate_line_total(purchase_price, quantity, line_total),
             update_stock_preview(current_stock, quantity, stock_after_purchase)
+        )
+    )
+# ==================================================================================
+#   Keyboard Shortcut
+#   Enter (while typing Quantity) = Add To Cart, same as clicking
+#   the button
+# ==================================================================================
+    quantity_entry.bind(
+        "<Return>",
+        lambda event: add_to_cart(
+            cart_tree, product_combo, product_map,
+            product, purchase_price, quantity, line_total, summary, supplier
         )
     )
 # =====================================
@@ -830,7 +885,13 @@ def purchase_history():
         values = history_tree.item(selected, "values")
         generate_purchase_receipt(values[0])
 
-
+# ==============================================================
+#   Keyboard Shortcut
+#   Ctrl+P = Print the currently selected purchase's receipt
+# ==============================================================
+    bind_shortcuts(history_win, {
+        "<Control-p>": print_selected_receipt,
+    })
 # =====================================
 # Load Purchase Details Items (into Treeview)
 # =====================================

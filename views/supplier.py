@@ -17,6 +17,7 @@ from utils.branding_helpers import add_branding_strip
 from services.invoice_service import generate_supplier_statement
 from utils.tree_helpers import build_treeview
 from utils.window_helpers import size_and_center
+from utils.shortcut_helper import bind_shortcuts
 
 SUPPLIER_COLUMNS = ("id", "name", "contact", "email", "address", "status")
 
@@ -238,6 +239,24 @@ def open_window():
     refresh_suppliers(tree)
     name_entry.focus_set()
 
+# ==========================================================
+#   Keyboard Shortcuts
+#   F2 = Save (new record) or Update (if a row is selected),
+#   Escape = Close window
+# ==========================================================
+    def handle_f2():
+        if selected_id.get():
+            handle_update(selected_id, name, contact, email, address, tree, ntn, is_filer)
+        else:
+            handle_save(name, contact, email, address, tree, ntn, is_filer)
+
+    bind_shortcuts(win, {
+        "<F2>": handle_f2,
+        "<Escape>": win.destroy,
+    })
+
+    refresh_suppliers(tree)
+    name_entry.focus_set()
 
 # =====================================
 # Supplier Purchase History Window
