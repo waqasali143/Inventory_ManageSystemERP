@@ -680,10 +680,10 @@ def sales_history():
     history_tree.heading("date", text="Date")
     history_tree.heading("gross_total", text="Gross Total",anchor=E)
     history_tree.heading("discount", text="Discount %")
-    history_tree.heading("discount_amount", text="Discount Amt")
+    history_tree.heading("discount_amount", text="Discount Amt", anchor=E)
     history_tree.heading("tax", text="Tax %", anchor=E)
-    history_tree.heading("tax_amount", text="Tax Amt")
-    history_tree.heading("net_total", text="Net Total")
+    history_tree.heading("tax_amount", text="Tax Amt", anchor=E)
+    history_tree.heading("net_total", text="Net Total", anchor=E)
     history_tree.heading("quantity", text="Qty")
     history_tree.heading("returned_qty", text="Returned")
 

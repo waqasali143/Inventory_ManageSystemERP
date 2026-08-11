@@ -40,7 +40,8 @@ def build_treeview(parent, columns, height=None):
 
         tree.heading(
             key,
-            text=col["heading"]
+            text=col["heading"],
+            anchor=col.get("anchor", W)
         )
 
         tree.column(
