@@ -11,6 +11,7 @@ except ImportError:
 from utils.branding_helpers import add_branding_strip
 
 from services.auth_service import login
+from views.about import APP_VERSION, DEVELOPER_NAME, DEVELOPER_EMAIL, DEVELOPER_CONTACT
 from utils.theme import (
     PRIMARY, PRIMARY_DARK, BACKGROUND, WHITE, TEXT,
     FONT_TITLE, FONT_BODY, FONT_BODY_BOLD,
@@ -37,7 +38,7 @@ def open_login_window(on_success):
     add_branding_strip(win)
     win.configure(bg=BACKGROUND)
 
-    size_and_center(win, width_ratio=0.28, height_ratio=0.65, resizable=False)
+    size_and_center(win, width_ratio=0.28, height_ratio=0.72, resizable=False)
 
     apply_app_style()
 
@@ -72,6 +73,24 @@ def open_login_window(on_success):
             header_frame, text="Business Management System",
             bg=PRIMARY, fg=WHITE, font=("Segoe UI", 9)
         ).pack(pady=(0, 10))
+    # ---------------- Footer (version / developer info) ----------------
+    # Packed BEFORE form_frame on purpose - form_frame below has
+    # expand=True, so it must be packed last or it claims all the
+    # space and this footer never gets room to show.
+    footer_frame = Frame(win, bg=BACKGROUND)
+    footer_frame.pack(side=BOTTOM, pady=8)
+
+    Label(
+        footer_frame, text=DEVELOPER_NAME,
+        bg=BACKGROUND, fg=TEXT, font=FONT_BODY_BOLD
+    ).pack(anchor="center")
+
+    Label(
+        footer_frame,
+        text=f"v{APP_VERSION}  •  {DEVELOPER_EMAIL}  •  {DEVELOPER_CONTACT}",
+        bg="#E5E7EB", fg="#4B5563", font=("Segoe UI", 9)
+    ).pack(anchor="center")
+
     # ---------------- Form ----------------
     form_frame = Frame(win, bg=BACKGROUND)
     form_frame.pack(fill=BOTH, expand=True, padx=40, pady=30)
@@ -117,6 +136,7 @@ def open_login_window(on_success):
 
     username_entry.bind("<Return>", lambda event: handle_login())
     password_entry.bind("<Return>", lambda event: handle_login())
+    
 
     username_entry.focus_set()
     win.deiconify() 

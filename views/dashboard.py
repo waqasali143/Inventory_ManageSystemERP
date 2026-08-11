@@ -20,6 +20,7 @@ from views import role as role_view
 from views import product, supplier, customer, expense, user, business_settings
 
 from views.report import open_report_window
+from views.about import open_about_window
 import sqlite3
 
 from utils import event_bus
@@ -309,12 +310,21 @@ class Dashboard:
 
         Label(
             self.sidebar, text="MENU", bg=SIDEBAR, fg=WHITE,
-            font=("Segoe UI", 18, "bold")
-        ).pack(pady=25)
+            font=("Segoe UI", 14, "bold")
+        ).pack(pady=12)
 
-        # ---------------- Fixed Footer: Logout (never scrolls away) ----------------
+        # ---------------- Fixed Footer: About + Logout (never scrolls away) ----------------
         footer = Frame(self.sidebar, bg=SIDEBAR)
         footer.pack(side=BOTTOM, fill=X)
+
+        about_btn = Button(
+            footer, text="ℹ️ About",
+            command=open_about_window,
+            font=FONT_BODY_BOLD, bg=SIDEBAR, fg=WHITE,
+            activebackground=PRIMARY, activeforeground=WHITE,
+            relief=FLAT, bd=0, cursor="hand2", anchor="w", padx=20
+        )
+        about_btn.pack(fill=X, ipady=8)
 
         logout_btn = Button(
             footer, text="🚪 Logout",
@@ -323,25 +333,11 @@ class Dashboard:
             activebackground=PRIMARY, activeforeground=WHITE,
             relief=FLAT, bd=0, cursor="hand2", anchor="w", padx=20
         )
-        logout_btn.pack(fill=X, ipady=12)
+        logout_btn.pack(fill=X, ipady=8)
 
-        # ---------------- Scrollable Nav (grows with roles/permissions) ----------------
-        nav_canvas = Canvas(self.sidebar, bg=SIDEBAR, highlightthickness=0)
-        nav_canvas.pack(side=TOP, fill=BOTH, expand=True)
-
-        nav_frame = Frame(nav_canvas, bg=SIDEBAR)
-        nav_canvas.create_window((0, 0), window=nav_frame, anchor="nw", width=220)
-
-        def sync_scrollregion(event):
-            nav_canvas.configure(scrollregion=nav_canvas.bbox("all"))
-
-        nav_frame.bind("<Configure>", sync_scrollregion)
-
-        def on_mousewheel(event):
-            nav_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        nav_canvas.bind("<Enter>", lambda e: nav_canvas.bind_all("<MouseWheel>", on_mousewheel))
-        nav_canvas.bind("<Leave>", lambda e: nav_canvas.unbind_all("<MouseWheel>"))
+        # ---------------- Nav (plain frame, no scrolling) ----------------
+        nav_frame = Frame(self.sidebar, bg=SIDEBAR)
+        nav_frame.pack(side=TOP, fill=BOTH, expand=True)
 
         # sidebar_button() will pack into this frame instead of self.sidebar directly
         self.sidebar_nav = nav_frame
@@ -849,7 +845,7 @@ class Dashboard:
             anchor="w",
             padx=20
         )
-        btn.pack(fill=X, ipady=12)
+        btn.pack(fill=X, ipady=8)
 
         if not hasattr(self, "sidebar_buttons"):
             self.sidebar_buttons = {}
@@ -881,7 +877,7 @@ class Dashboard:
             relief=FLAT, bd=0, anchor="w", padx=20,
             cursor="hand2"
         )
-        menu_btn.pack(fill=X, ipady=12)
+        menu_btn.pack(fill=X, ipady=8)
 
         reports_menu = Menu(menu_btn, tearoff=0)
         reports_menu.add_command(label="💰 Sales History", command=sales_history)

@@ -18,6 +18,7 @@ from utils.branding_helpers import add_branding_strip
 from utils.tree_helpers import build_treeview, reload_treeview
 from utils.ui_helpers import add_buttons, labeled_entry, labeled_date_picker
 from utils.shortcut_helper import bind_shortcuts
+from utils.barcode_helpers import create_scan_entry
 
 from services.invoice_service import generate_purchase_receipt, generate_purchase_report_pdf
 
@@ -596,6 +597,32 @@ def purchase_window():
         padx=10,
         pady=8
     )
+# ---------------------------------------------
+# Barcode Scan
+# (scanning fills product/price/stock and adds the line to the
+#  cart immediately, same convenience as the Sales screen)
+# ---------------------------------------------
+    def on_barcode_scanned(product_row):
+        product_id, product_name, cost_price, sale_price_value, stock, status, barcode_value = product_row
+
+        if product_name not in product_map:
+            product_map[product_name] = product_id
+
+        product.set(product_name)
+        purchase_price.set(cost_price)
+        current_stock.set(stock)
+        stock_after_purchase.set(stock)
+        quantity.set(1)
+
+        add_to_cart(
+            cart_tree, product_combo, product_map,
+            product, purchase_price, quantity, line_total, summary, supplier
+        )
+
+    Label(purchase_frame, text="Scan Barcode").grid(row=4, column=2, padx=10, pady=8, sticky="w")
+    scan_entry = create_scan_entry(purchase_frame, on_barcode_scanned, width=20)
+    scan_entry.grid(row=4, column=3, padx=10, pady=8, sticky="ew")
+
 # ---------------------------------------------
 # Purchase Price Entry
 # --------------------------------------------
