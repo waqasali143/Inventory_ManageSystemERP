@@ -212,10 +212,26 @@ def increment_product_stock(cursor, product_id, quantity):
     ))
 
 # =====================================
+# Update Product Cost Price
+# (called from save_purchase - freezes the latest purchase price
+#  as the product's current cost, same as sale_price is on Sales)
+# =====================================
+def update_product_cost_price(cursor, product_id, cost_price):
+
+    cursor.execute("""
+        UPDATE products
+        SET cost_price = ?
+        WHERE id = ?
+    """, (
+        cost_price,
+        product_id
+    ))
+
+# =====================================
 # Fetch Purchase History
 # (search_term=None -> all rows, otherwise filters by purchase_no)
 # =====================================
-def fetch_purchase_history(search_term=None):
+def fetch_purchase_history(search_term=None, date_from=None, date_to=None):
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -246,21 +262,29 @@ def fetch_purchase_history(search_term=None):
         INNER JOIN suppliers s
             ON p.supplier_id = s.id
     """
+    conditions = []
+    params = []
 
     if search_term:
-        cursor.execute(
-            base_query + " WHERE p.purchase_no LIKE ? ORDER BY p.id DESC",
-            ("%" + search_term + "%",)
-        )
-    else:
-        cursor.execute(base_query + " ORDER BY p.id DESC")
+        conditions.append("p.purchase_no LIKE ?")
+        params.append("%" + search_term + "%")
 
+    if date_from and date_to:
+        conditions.append("date(p.purchase_date) BETWEEN ? AND ?")
+        params.append(date_from)
+        params.append(date_to)
+
+    if conditions:
+        base_query += " WHERE " + " AND ".join(conditions)
+
+    base_query += " ORDER BY p.id DESC"
+
+    cursor.execute(base_query, params)
     rows = cursor.fetchall()
-
     conn.close()
 
     return rows
-
+    
 # =====================================
 # Fetch Purchase Header (for details window)
 # =====================================

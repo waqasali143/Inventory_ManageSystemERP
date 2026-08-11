@@ -13,6 +13,17 @@ def load_customers():
     return repo.fetch_active_customers()
 
 
+def get_customer_id_by_name(customer_name):
+    """Resolve a customer's ID from the name shown in the combobox.
+
+    Reuses the same repo lookup save_sale() already relies on, so
+    Sales/Purchase screens can look up a customer's ID (e.g. to fetch
+    filer status for tax auto-fill) without needing a separate
+    id/name map like product_map.
+    """
+    return repo.fetch_customer_id(customer_name)
+
+
 def load_products():
     return repo.fetch_active_products()
 
@@ -188,7 +199,7 @@ def save_sale(customer, cart_tree, summary):
         event_bus.publish()
 
         messagebox.showinfo("Success", f"Sale {sale_no} saved successfully.")
-        return True
+        return sale_id
 
     except Exception as e:
         conn.rollback()
@@ -262,8 +273,8 @@ def process_sale_return(sale_id, product_id, return_qty, reason,
 # Thin wrappers for history/details (so views never import
 # repositories directly)
 # =====================================
-def get_sales_history(search_term=None):
-    return repo.fetch_sales_history(search_term)
+def get_sales_history(search_term=None, date_from=None, date_to=None):
+    return repo.fetch_sales_history(search_term, date_from, date_to)
 
 def get_sale_header(sale_id):
     return repo.fetch_sale_header(sale_id)

@@ -7,7 +7,7 @@ def fetch_customers(search_term=None):
     cursor = conn.cursor()
 
     base_query = """
-        SELECT id, name, contact, email, address, status
+        SELECT id, name, contact, email, address, status, ntn, is_filer
         FROM customers
     """
     if search_term:
@@ -23,29 +23,29 @@ def fetch_customers(search_term=None):
 
     return rows
 
-def insert_customer(name, contact, email, address):
+def insert_customer(name, contact, email, address, ntn="", is_filer=0):
 
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO customers(name, contact, email, address)
-        VALUES (?, ?, ?, ?)
-    """, (name, contact, email, address))
+        INSERT INTO customers(name, contact, email, address, ntn, is_filer)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (name, contact, email, address, ntn, is_filer))
 
     conn.commit()
     conn.close()
 
-def update_customer(customer_id, name, contact, email, address):
+def update_customer(customer_id, name, contact, email, address, ntn="", is_filer=0):
 
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
         UPDATE customers
-        SET name=?, contact=?, email=?, address=?
+        SET name=?, contact=?, email=?, address=?, ntn=?, is_filer=?
         WHERE id=?
-    """, (name, contact, email, address, customer_id))
+    """, (name, contact, email, address, ntn, is_filer, customer_id))
 
     conn.commit()
     conn.close()
@@ -85,3 +85,32 @@ def set_customer_status(customer_id, status):
 
     conn.commit()
     conn.close()
+# -----------------------------------------------------------
+# = = = = This function use for Sales Window = = = =
+# ==========================================================
+def fetch_customer_filer_status(customer_id):
+    """Returns True if the customer is a Filer, False otherwise."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT is_filer FROM customers WHERE id = ?", (customer_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    return bool(row[0]) if row else False
+# ==========================================================================================
+def fetch_customer_ntn(customer_id):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT ntn
+        FROM customers
+        WHERE id = ?
+    """, (customer_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    return row[0] if row else ""

@@ -1,195 +1,123 @@
 
 from tkinter import *
-import sqlite3
 from tkinter import messagebox
-from views import dashboard
 
-# ======================================
-# Login User
-# =====================================
-def login_user(username, password, password_entry, win):
+try:
+    from PIL import Image as PILImage, ImageTk
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
-    if username.get().strip() == "" or password.get().strip() == "":
-        messagebox.showerror(
-            "Error",
-            "Username and Password are required."
-        )
-        return
+from utils.branding_helpers import add_branding_strip
 
-    conn = sqlite3.connect("database/inventory.db")
-    cursor = conn.cursor()
+from services.auth_service import login
+from utils.theme import (
+    PRIMARY, PRIMARY_DARK, BACKGROUND, WHITE, TEXT,
+    FONT_TITLE, FONT_BODY, FONT_BODY_BOLD,
+    apply_app_style
+)
 
-    cursor.execute("""
-        SELECT * FROM users
-        WHERE username=? AND password=?
-    """, (
-        username.get().strip(),
-        password.get().strip()
-    ))
+from utils.window_helpers import size_and_center
+# =====================================================================
 
-    user = cursor.fetchone()
+def open_login_window(on_success):
+    """
+    on_success: a function to call (with no arguments) once login
+    succeeds - main.py will pass in "open the Dashboard" here.
+    """
 
-    conn.close()
+    win = Tk()
+    win.withdraw()
+    win.title("Inventra ERP | Login")
+    try:
+        win.iconbitmap("assets/ims.ico")
+    except Exception:
+        pass
 
-    if user:
-        messagebox.showinfo(
-            "Success",
-            "Login Successful"
-        )
+    add_branding_strip(win)
+    win.configure(bg=BACKGROUND)
 
-        win.destroy()
+    size_and_center(win, width_ratio=0.28, height_ratio=0.65, resizable=False)
 
-        dashboard.open_dashboard()
+    apply_app_style()
 
+    # ---------------- Header ----------------
+    header_frame = Frame(win, bg=PRIMARY, height=140)
+    header_frame.pack(fill=X)
+    header_frame.pack_propagate(False)
+
+    if PIL_AVAILABLE:
+        try:
+            logo_img = PILImage.open("assets/logo.png")
+            logo_img.thumbnail((200, 150))
+            logo_photo = ImageTk.PhotoImage(logo_img)
+
+            logo_label = Label(header_frame, image=logo_photo, bg=PRIMARY)
+            logo_label.image = logo_photo
+            logo_label.pack(pady=(15, 5))
+        except Exception as e:
+            print("LOGO LOAD FAILED:", e)
+            Label(
+                header_frame, text="Inventra ERP",
+                bg=PRIMARY, fg=WHITE, font=FONT_BODY_BOLD
+            ).pack(pady=(25, 5))
     else:
-
-        messagebox.showerror(
-            "Login Failed",
-            "Invalid Username or Password"
-        )
-
-        password.set("")
-        password_entry.focus_set()
-# ======================================================
-def toggle_password(password_entry, show_password):
-
-    if show_password.get():
-        password_entry.config(show="")
-    else:
-        password_entry.config(show="*")
-# ======================================================
-def open_login():
-
-    win = Toplevel()
-
-    win.title("Login")
-
-    win.geometry("450x350")
-# ==========================
-# Center Window Login
-# ==========================
-
-    window_width = 450
-    window_height = 350
-
-    screen_width = win.winfo_screenwidth()
-    screen_height = win.winfo_screenheight()
-
-    x = (screen_width // 2) - (window_width // 2)
-    y = (screen_height // 2) - (window_height // 2)
-
-    win.geometry(f"{window_width}x{window_height}+{x}+{y}")
-
-    win.resizable(False, False)
-    win.iconbitmap("assets/ims.ico")
-    win.protocol("WM_DELETE_WINDOW", win.quit)
-
-# ==========================
-# Title
-# ==========================
-
-    title = Label(
-        win,
-        text="Inventory Management System",
-        font=("Arial", 18, "bold"),
-        bg="#0f4c81",
-        fg="white",
-        pady=12
-    )
-
-    title.pack(fill=X)
-
-# ==========================
-# Variables
-# ==========================
+        print("PIL not available")
+        Label(
+            header_frame, text="Inventra ERP",
+            bg=PRIMARY, fg=WHITE, font=FONT_BODY_BOLD
+        ).pack(pady=(25, 5))
+# --------------------------------------------------------------------
+    Label(
+            header_frame, text="Business Management System",
+            bg=PRIMARY, fg=WHITE, font=("Segoe UI", 9)
+        ).pack(pady=(0, 10))
+    # ---------------- Form ----------------
+    form_frame = Frame(win, bg=BACKGROUND)
+    form_frame.pack(fill=BOTH, expand=True, padx=40, pady=30)
 
     username = StringVar()
     password = StringVar()
-    show_password = BooleanVar()
 
-# ==========================
-# Login Frame
-# ==========================
+    Label(form_frame, text="Username", bg=BACKGROUND, font=FONT_BODY).pack(anchor="w", pady=(10, 2))
+    username_entry = Entry(form_frame, textvariable=username, font=FONT_BODY)
+    username_entry.pack(fill=X, ipady=5)
 
-    login_frame = Frame(win)
+    Label(form_frame, text="Password", bg=BACKGROUND, font=FONT_BODY).pack(anchor="w", pady=(15, 2))
+    password_entry = Entry(form_frame, textvariable=password, show="•", font=FONT_BODY)
+    password_entry.pack(fill=X, ipady=5)
 
-    login_frame.pack(pady=40)
+    error_label = Label(form_frame, text="", bg=BACKGROUND, fg="red", font=FONT_BODY)
+    error_label.pack(pady=(8, 0))
+# ===================================================================================
 
-    Label(
-        login_frame,
-        text="Username",
-        font=("Arial", 11)
-    ).grid(row=0, column=0, sticky="w", pady=10)
+    def handle_login():
+        if username.get().strip() == "":
+            error_label.config(text="Please enter your username.")
+            username_entry.focus_set()
+            return
 
-    username_entry = Entry(
-        login_frame,
-        textvariable=username,
-        width=30
-    )
+        if password.get().strip() == "":
+            error_label.config(text="Please enter your password.")
+            password_entry.focus_set()
+            return
 
-    username_entry.grid(row=0, column=1, padx=10)
-# =============================================
-# Password
-# =============================================
-    Label(
-        login_frame,
-        text="Password",
-        font=("Arial", 11)
-    ).grid(row=1, column=0, sticky="w", pady=10)
+        if login(username.get().strip(), password.get().strip()):
+            win.destroy()
+            on_success()
+        else:
+            error_label.config(text="Invalid username or password.")
+    # ===========================================================================
 
-    password_entry = Entry(
-        login_frame,
-        textvariable=password,
-        show="*",
-        width=30
-    )
-
-    password_entry.grid(row=1, column=1, padx=10)
-# ===============================================
-#  Check Button
-# ===============================================
-    Checkbutton(
-        login_frame,
-        text="Show Password",
-        variable=show_password,
-        command=lambda: toggle_password(
-            password_entry,
-            show_password
-        )
-    ).grid(
-        row=2,
-        column=1,
-        sticky="w",
-        pady=5
-    )
-# ===============================================
-# Login Button
-# ===============================================
-    password_entry.bind(
-        "<Return>",
-        lambda event: login_user(
-            username,
-            password,
-            password_entry,
-            win
-        )
-    )
-# ===============================================
     Button(
-        login_frame,
-        text="Login",
-        width=15,
-        font=("Arial", 11, "bold"),
-        command=lambda: login_user(
-        username,
-        password,
-        password_entry,
-        win)
-    ).grid(
-        row=3,
-        column=0,
-        columnspan=2,
-        pady=20
-    )
+        form_frame, text="Login", bg=PRIMARY, fg=WHITE,
+        font=FONT_BODY_BOLD, relief=FLAT, cursor="hand2",
+        command=handle_login
+    ).pack(side=BOTTOM, fill=X, ipady=8, pady=(20, 10))
+
+    username_entry.bind("<Return>", lambda event: handle_login())
+    password_entry.bind("<Return>", lambda event: handle_login())
 
     username_entry.focus_set()
+    win.deiconify() 
+    win.mainloop()

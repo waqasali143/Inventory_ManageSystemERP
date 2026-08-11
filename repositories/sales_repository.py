@@ -133,7 +133,7 @@ def decrement_product_stock(cursor, product_id, quantity):
 # =====================================================
 # History Details Function
 # =====================================================
-def fetch_sales_history(search_term=None):
+def fetch_sales_history(search_term=None, date_from=None, date_to=None):
 
     conn = get_connection()
     cursor = conn.cursor()
@@ -157,19 +157,29 @@ def fetch_sales_history(search_term=None):
         INNER JOIN customers c ON s.customer_id = c.id
     """
 
-    if search_term:
-        cursor.execute(
-            base_query + " WHERE s.sale_no LIKE ? ORDER BY s.id DESC",
-            ("%" + search_term + "%",)
-        )
-    else:
-        cursor.execute(base_query + " ORDER BY s.id DESC")
+    conditions = []
+    params = []
 
+    if search_term:
+        conditions.append("s.sale_no LIKE ?")
+        params.append("%" + search_term + "%")
+
+    if date_from and date_to:
+        conditions.append("date(s.sale_date) BETWEEN ? AND ?")
+        params.append(date_from)
+        params.append(date_to)
+
+    if conditions:
+        base_query += " WHERE " + " AND ".join(conditions)
+
+    base_query += " ORDER BY s.id DESC"
+
+    cursor.execute(base_query, params)
     rows = cursor.fetchall()
     conn.close()
 
     return rows
-
+# =================================================================
 
 def fetch_sale_header(sale_id):
 

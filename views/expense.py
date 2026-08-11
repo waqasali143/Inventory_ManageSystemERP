@@ -1,6 +1,8 @@
 from tkinter import *
 from tkinter import ttk
 
+from utils.branding_helpers import add_branding_strip
+
 from services.expense_service import (
     load_expenses, save_expense, update_expense, delete_expense
 )
@@ -92,6 +94,8 @@ def handle_delete(selected_id, category, description, amount, expense_date, tree
 def open_window():
 
     win = Toplevel()
+    add_branding_strip(win)
+
     win.title("Expense Management")
     win.configure(bg=BACKGROUND)
 

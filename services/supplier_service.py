@@ -30,7 +30,7 @@ def load_suppliers(search_term=None):
 # =====================================
 # Save Supplier
 # =====================================
-def save_supplier(name, contact, email, address):
+def save_supplier(name, contact, email, address, ntn=None, is_filer=None):
 
     is_valid, message = validate_supplier_data(name, contact)
     if not is_valid:
@@ -43,11 +43,16 @@ def save_supplier(name, contact, email, address):
         messagebox.showerror("Error", "Supplier already exists!")
         return False
 
+    ntn_value = ntn.get().strip() if ntn else ""
+    filer_value = int(is_filer.get()) if is_filer else 0
+
     repo.insert_supplier(
         supplier_name,
         contact.get().strip(),
         email.get().strip(),
-        address.get().strip()
+        address.get().strip(),
+        ntn_value,
+        filer_value
     )
 
     event_bus.publish()
@@ -58,7 +63,7 @@ def save_supplier(name, contact, email, address):
 # =====================================
 # Update Supplier
 # =====================================
-def update_supplier(selected_id, name, contact, email, address):
+def update_supplier(selected_id, name, contact, email, address, ntn=None, is_filer=None):
 
     if not selected_id.get():
         messagebox.showerror("Error", "Please select a supplier first.")
@@ -75,12 +80,17 @@ def update_supplier(selected_id, name, contact, email, address):
         messagebox.showerror("Duplicate Supplier", "Supplier name already exists.")
         return False
 
+    ntn_value = ntn.get().strip() if ntn else ""
+    filer_value = int(is_filer.get()) if is_filer else 0
+
     repo.update_supplier(
         selected_id.get(),
         supplier_name,
         contact.get().strip(),
         email.get().strip(),
-        address.get().strip()
+        address.get().strip(),
+        ntn_value,
+        filer_value
     )
 
     event_bus.publish()
@@ -129,3 +139,7 @@ def delete_supplier(selected_id):
             return True
 
     return False
+# =======================================================
+# = = == = wrapper = = = = = 
+def get_supplier_filer_status(supplier_id):
+    return repo.fetch_supplier_filer_status(supplier_id)

@@ -3,23 +3,33 @@ from tkinter import *
 from tkinter import ttk
 
 from tkinter import messagebox
+from utils.ui_helpers import add_buttons, labeled_entry, labeled_date_picker
+from utils.export_helpers import export_to_excel
+from utils.window_helpers import size_and_center
+from utils.branding_helpers import add_branding_strip
+from utils.barcode_helpers import create_scan_entry
+
 from services.sales_summary import SalesSummary
 from services.sales_service import (
-    load_customers, load_products, get_product_details,
+    load_customers, get_customer_id_by_name, load_products, get_product_details,
     validate_sale_line, calculate_sale_totals,
     remove_cart_item, clear_cart, clear_sale_form,
     save_sale, get_sales_history, get_sale_header, get_sale_items,
     get_sale_items_for_return, get_returns_for_sale, process_sale_return,
     get_all_sale_returns
 )
-from utils.window_helpers import size_and_center
 from services.settings_service import format_currency
+from services.invoice_service import generate_sale_invoice, generate_sales_report_pdf
+from services.customer_service import get_customer_filer_status
+from services.tax_service import get_applicable_tax_rate
+
 # =====================================
 # Sales Window
 # =====================================
 def sales_window():
 
     win = Toplevel()
+    add_branding_strip(win)
 
     win.title("Sales Management")
 
@@ -37,10 +47,7 @@ def sales_window():
         bg="white"
     )
 
-    toolbar.pack(
-        side=TOP,
-        fill=X
-    )
+    toolbar.pack(side=TOP, fill=X)
 # =====================================
 # Sales Information Frame
 # =====================================
@@ -279,6 +286,27 @@ def sales_window():
         pady=5
     )
     customer_combo["values"] = load_customers()
+
+# ---------------------------
+#  Customer Selected
+#  (auto-fills Tax % based on the customer's filer status —
+#  summary/refresh_totals already exist above, so it's safe here)
+# ---------------------------
+    def on_customer_selected(event):
+
+        customer_name = customer_combo.get()
+        customer_id = get_customer_id_by_name(customer_name)
+
+        if customer_id is None:
+            return
+
+        is_filer = get_customer_filer_status(customer_id)
+        tax_rate = get_applicable_tax_rate(is_filer)
+
+        summary.tax.set(str(tax_rate))
+        refresh_totals()
+
+    customer_combo.bind("<<ComboboxSelected>>", on_customer_selected)
 # ==========================
 #   Product Field
 # --------------===========
@@ -304,6 +332,25 @@ def sales_window():
         padx=5,
         pady=5
     )
+# -------------------------------------------------------------------
+
+    def on_barcode_scanned(product_row):
+            product_id, product_name, cost_price, sale_price_value, stock, status, barcode_value = product_row
+
+            if product_name not in product_map:
+                product_map[product_name] = product_id
+
+            product.set(product_name)
+            sale_price.set(sale_price_value)
+            available_stock.set(stock)
+            quantity.set(1)
+
+            add_to_cart()  # turant cart mein add ho jaye
+
+    Label(sales_frame, text="Scan Barcode").grid(row=2, column=2, padx=10, pady=8, sticky="w")
+    scan_entry = create_scan_entry(sales_frame, on_barcode_scanned, width=20)
+    scan_entry.grid(row=2, column=3, padx=10, pady=8, sticky="ew")
+    scan_entry.focus_set()
 
 # ----------------------------
     products = load_products()
@@ -458,8 +505,8 @@ def sales_window():
 # ===========================
     def handle_save():
         if save_sale(customer, cart_tree, summary):
-            clear_sale_form(customer, product, quantity, 
-                            sale_price, available_stock, cart_tree, summary)
+            clear_sale_form(customer, product, quantity, sale_price, 
+                            available_stock, cart_tree, summary)
 # ===========================
 #   Buttons
 # ==========================
@@ -509,6 +556,76 @@ def sales_history():
     size_and_center(history_win, width_ratio=0.9, height_ratio=0.75, resizable=True)
     search_frame = LabelFrame(history_win, text="Search Sale", padx=10, pady=10)
     search_frame.pack(fill="x", padx=10, pady=10)
+# ======================================================================================
+# ======== Date Picker ==================
+
+    Label(search_frame, text="Sale No").grid(row=0, column=0, padx=5)
+    sale_search = StringVar()
+    Entry(search_frame, textvariable=sale_search, width=30).grid(row=0, column=1, padx=5)
+
+    Button(
+        search_frame, text="Search", width=12,
+        command=lambda: load_history(sale_search.get().strip())
+    ).grid(row=0, column=2, padx=5)
+
+    Button(
+        search_frame, text="Show All", width=12,
+        command=lambda: load_history()
+    ).grid(row=0, column=3, padx=5)
+
+    date_from_picker = labeled_date_picker(search_frame, "From", 1, 0)
+    date_to_picker = labeled_date_picker(search_frame, "To", 1, 2)
+
+    Button(
+        search_frame, text="Filter by Date", width=14,
+        command=lambda: load_history(
+            date_from=date_from_picker.get(), date_to=date_to_picker.get()
+        )
+    ).grid(row=1, column=4, padx=5)
+# =======================================================================================
+# =========== Print ==================
+    Button(
+        search_frame, text="🖨 Print Report", width=14,
+        command=lambda: generate_sales_report_pdf(
+            get_sales_history(None, date_from_picker.get(), date_to_picker.get()),
+            date_from_picker.get(), date_to_picker.get()
+        )
+    ).grid(row=1, column=5, padx=5)
+
+    Button(
+        search_frame, text="🖨 Print Selected", width=14,
+        command=lambda: print_selected_invoice()
+    ).grid(row=1, column=6, padx=5)
+
+    Button(
+        search_frame, text="🗂 Export to Excel", width=16,
+        command=lambda: export_current_history()
+    ).grid(row=1, column=7, padx=5)
+# ===============================================================
+    def export_current_history():
+        rows = get_sales_history(
+            sale_search.get().strip() or None,
+            date_from_picker.get(), date_to_picker.get()
+        )
+
+        headers = [
+            "ID", "Sale No", "Customer", "Date",
+            "Gross Total", "Discount %", "Discount Amt",
+            "Tax %", "Tax Amt", "Net Total", "Qty Sold", "Returned Qty"
+        ]
+
+        export_to_excel(headers, rows, "Sales_History")
+# ============================================================================
+
+    def print_selected_invoice():
+        selected = history_tree.focus()
+        if not selected:
+            from tkinter import messagebox
+            messagebox.showerror("Error", "Please select a sale from the list first.")
+            return
+        values = history_tree.item(selected, "values")
+        generate_sale_invoice(values[0])
+# ==============================================================================
 
     Label(search_frame, text="Sale No").grid(row=0, column=0, padx=5)
     sale_search = StringVar()
@@ -516,10 +633,11 @@ def sales_history():
     
     history_tree = None
 
-    def load_history(search_term=None):
+# ============================================================================
+    def load_history(search_term=None, date_from=None, date_to=None):
         for row in history_tree.get_children():
             history_tree.delete(row)
-        rows = get_sales_history(search_term)
+        rows = get_sales_history(search_term, date_from, date_to)
         for row in rows:
             formatted = (
                 row[0], row[1], row[2], row[3],
@@ -560,10 +678,10 @@ def sales_history():
     history_tree.heading("sale_no", text="Sale No")
     history_tree.heading("customer", text="Customer")
     history_tree.heading("date", text="Date")
-    history_tree.heading("gross_total", text="Gross Total")
+    history_tree.heading("gross_total", text="Gross Total",anchor=E)
     history_tree.heading("discount", text="Discount %")
     history_tree.heading("discount_amount", text="Discount Amt")
-    history_tree.heading("tax", text="Tax %")
+    history_tree.heading("tax", text="Tax %", anchor=E)
     history_tree.heading("tax_amount", text="Tax Amt")
     history_tree.heading("net_total", text="Net Total")
     history_tree.heading("quantity", text="Qty")
@@ -610,10 +728,10 @@ def show_sale_details(sale_id):
         tax, tax_amount, net_total
     ) = get_sale_header(sale_id)
 
+# ========= Details Window =================================
     details_win = Toplevel()
     details_win.title("Sale Details")
-    details_win.geometry("750x500")
-    details_win.resizable(False, False)
+    size_and_center(details_win, width_ratio=0.7, height_ratio=1, resizable=True)
 
     header_frame = LabelFrame(details_win, text="Sale Information", padx=10, pady=10)
     header_frame.pack(fill="x", padx=10, pady=10)
@@ -668,6 +786,11 @@ def show_sale_details(sale_id):
         row=0, column=2, padx=15, pady=5, sticky="w")
     Label(totals_frame, text=f"Net Total : {format_currency(net_total)}", font=("Arial", 11, "bold")).grid(
         row=0, column=3, padx=15, pady=5, sticky="w")
+
+    Button(
+            details_win, text="🖨 Print Invoice", width=20,
+            command=lambda: generate_sale_invoice(sale_id)
+        ).pack(side=BOTTOM, pady=(0, 15))
 
 # =====================================
 # Sale Return Window

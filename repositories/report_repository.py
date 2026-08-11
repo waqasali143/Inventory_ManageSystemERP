@@ -142,3 +142,74 @@ def fetch_daily_purchase_trend(start_date, end_date):
     conn.close()
 
     return rows
+# ============================================================
+# ======= Product wise calculation ================
+def fetch_product_wise_raw(start_date, end_date):
+    """
+    Returns raw rows needed to build a per-product profit breakdown:
+    (product_name, quantity, sale_price, cost_price, subtotal,
+     sale_gross_total, sale_discount_amount)
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            p.name,
+            si.quantity,
+            si.sale_price,
+            si.cost_price,
+            si.subtotal,
+            s.gross_total,
+            s.discount_amount
+        FROM sale_items si
+        INNER JOIN sales s ON si.sale_id = s.id
+        INNER JOIN products p ON si.product_id = p.id
+        WHERE date(s.sale_date) BETWEEN ? AND ?
+    """, (start_date, end_date))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows
+# ===================================================================
+# ====== Current Stock =====================
+def fetch_current_stock_map():
+    """Returns {product_name: current_quantity} for every product -
+    used to show remaining stock alongside the profit report."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT name, quantity FROM products")
+    rows = cursor.fetchall()
+    conn.close()
+
+    return dict(rows)
+# ============================================================
+# ======= Unsolved Products =========
+def fetch_unsold_products(start_date, end_date):
+    """
+    Products that had ZERO sales in the given date range - useful
+    for spotting slow-moving/stagnant stock.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT p.name, p.quantity
+        FROM products p
+        WHERE p.status != 'Inactive'
+          AND p.id NOT IN (
+              SELECT si.product_id
+              FROM sale_items si
+              INNER JOIN sales s ON si.sale_id = s.id
+              WHERE date(s.sale_date) BETWEEN ? AND ?
+          )
+        ORDER BY p.name
+    """, (start_date, end_date))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows

@@ -39,8 +39,13 @@ def get_report_data(start_date, end_date):
 
     total_sales, total_purchases, total_expenses = repo.fetch_totals(start_date, end_date)
 
-    gross_profit = repo.fetch_gross_profit(start_date, end_date)
-    net_profit = gross_profit - total_expenses
+    product_details = get_product_wise_report(start_date, end_date)
+
+    # Accurate profit: only counts items that were actually SOLD,
+    # using each item's real cost at the time it was sold - stock
+    # still sitting in inventory never affects this number.
+    gross_profit = sum(row[5] for row in product_details)   # row[5] = profit
+    total_profit = gross_profit - total_expenses
 
     best_products = repo.fetch_top_products(start_date, end_date, limit=10, worst=False)
     worst_products = repo.fetch_top_products(start_date, end_date, limit=10, worst=True)
@@ -55,10 +60,74 @@ def get_report_data(start_date, end_date):
         "total_purchases": total_purchases,
         "total_expenses": total_expenses,
         "gross_profit": gross_profit,
-        "net_profit": net_profit,
+        "total_profit": total_profit,
         "best_products": best_products,
         "worst_products": worst_products,
         "expense_breakdown": expense_breakdown,
         "sales_trend": sales_trend,
         "purchase_trend": purchase_trend,
+        "product_details": product_details,
+        "unsold_products": get_unsold_products(start_date, end_date),
     }
+# =====================================================================
+# PRODUCT-WISE DETAILED BREAKDOWN
+# For each product: total qty sold, revenue, its proportional share
+# of each invoice's discount, its cost (at time of sale), and profit.
+# =====================================================================
+def get_product_wise_report(start_date, end_date):
+
+    raw_rows = repo.fetch_product_wise_raw(start_date, end_date)
+
+    products = {}
+
+    for name, qty, sale_price, cost_price, subtotal, sale_gross, sale_discount in raw_rows:
+
+        # This item's proportional share of its invoice's discount:
+        # (this item's subtotal / invoice's gross total) * invoice discount
+        if sale_gross > 0:
+            allocated_discount = (subtotal / sale_gross) * sale_discount
+        else:
+            allocated_discount = 0.0
+
+        cost = cost_price * qty
+        profit = subtotal - allocated_discount - cost
+
+        if name not in products:
+            products[name] = {
+                "qty": 0,
+                "revenue": 0.0,
+                "discount": 0.0,
+                "cost": 0.0,
+                "profit": 0.0,
+            }
+
+        products[name]["qty"] += qty
+        products[name]["revenue"] += subtotal
+        products[name]["discount"] += allocated_discount
+        products[name]["cost"] += cost
+        products[name]["profit"] += profit
+
+    # Convert to a sorted list (highest profit first)
+    
+    stock_map = repo.fetch_current_stock_map()
+
+    result = [
+        (
+            name,
+            data["qty"],
+            data["revenue"],
+            data["discount"],
+            data["cost"],
+            data["profit"],
+            stock_map.get(name, 0),
+        )
+        for name, data in products.items()
+    ]
+
+    result.sort(key=lambda row: row[5], reverse=True)
+
+    return result
+# ================================================================
+# ==== Unsolved Products Wraper =============
+def get_unsold_products(start_date, end_date):
+    return repo.fetch_unsold_products(start_date, end_date)

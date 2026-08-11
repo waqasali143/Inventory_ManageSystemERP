@@ -10,6 +10,9 @@ from utils.theme import (
     PRIMARY, BACKGROUND, WHITE,
     FONT_TITLE, FONT_BODY, apply_app_style
 )
+from utils.branding_helpers import add_branding_strip
+
+from services.invoice_service import generate_customer_statement
 from utils.tree_helpers import build_treeview
 from utils.window_helpers import size_and_center
 
@@ -37,7 +40,7 @@ def search_customer(search, tree):
 # =====================================
 # Pull the selected row into the form fields
 # =====================================
-def select_customer(event, tree, name, contact, email, address, selected_id):
+def select_customer(event, tree, name, contact, email, address, selected_id, ntn, is_filer):
 
     selected = tree.focus()
     values = tree.item(selected, "values")
@@ -50,15 +53,19 @@ def select_customer(event, tree, name, contact, email, address, selected_id):
     contact.set(values[2])
     email.set(values[3])
     address.set(values[4])
+    ntn.set(values[6])
+    is_filer.set(bool(values[7]))
 
 
-def clear_fields(selected_id, name, contact, email, address, name_entry):
+def clear_fields(selected_id, name, contact, email, address, ntn, is_filer, name_entry):
 
     selected_id.set("")
     name.set("")
     contact.set("")
     email.set("")
     address.set("")
+    ntn.set("")
+    is_filer.set(False)
 
     name_entry.focus_set()
 
@@ -66,23 +73,27 @@ def clear_fields(selected_id, name, contact, email, address, name_entry):
 # =====================================
 # Button handlers (wrap service calls + refresh + clear on success)
 # =====================================
-def handle_save(name, contact, email, address, tree):
-    if save_customer(name, contact, email, address):
+def handle_save(name, contact, email, address, tree, ntn, is_filer):
+    if save_customer(name, contact, email, address, ntn, is_filer):
         refresh_customers(tree)
         name.set("")
         contact.set("")
         email.set("")
         address.set("")
+        ntn.set("")
+        is_filer.set(False)
 
 
-def handle_update(selected_id, name, contact, email, address, tree):
-    if update_customer(selected_id, name, contact, email, address):
+def handle_update(selected_id, name, contact, email, address, tree, ntn, is_filer):
+    if update_customer(selected_id, name, contact, email, address, ntn, is_filer):
         refresh_customers(tree)
         selected_id.set("")
         name.set("")
         contact.set("")
         email.set("")
         address.set("")
+        ntn.set("")
+        is_filer.set(False)
 
 
 def handle_delete(selected_id, tree):
@@ -97,6 +108,8 @@ def handle_delete(selected_id, tree):
 def open_window():
 
     win = Toplevel()
+    add_branding_strip(win)
+
     win.title("Customer Management")
     win.geometry("950x600")
     win.resizable(False, False)
@@ -146,18 +159,26 @@ def open_window():
     Label(customer_frame, text="Address").grid(row=3, column=0)
     Entry(customer_frame, textvariable=address, width=35).grid(row=3, column=1, padx=10, pady=5)
 
+    Label(customer_frame, text="NTN").grid(row=4, column=0)
+    ntn = StringVar()
+    Entry(customer_frame, textvariable=ntn, width=35).grid(row=4, column=1, padx=10, pady=5)
+
+    is_filer = BooleanVar(value=False)
+    Checkbutton(customer_frame, text="Filer (registered with FBR)", variable=is_filer).grid(
+        row=5, column=1, sticky="w", padx=10, pady=5)
+
     # ---------------- Buttons ----------------
     button_frame = Frame(customer_frame)
-    button_frame.grid(row=4, column=0, columnspan=2, pady=15)
+    button_frame.grid(row=6, column=0, columnspan=2, pady=15)
 
     Button(
         button_frame, text="Save", width=10,
-        command=lambda: handle_save(name, contact, email, address, tree)
+        command=lambda: handle_save(name, contact, email, address, tree, ntn, is_filer)
     ).grid(row=0, column=0, padx=5)
 
     Button(
         button_frame, text="Update", width=10,
-        command=lambda: handle_update(selected_id, name, contact, email, address, tree)
+        command=lambda: handle_update(selected_id, name, contact, email, address, tree, ntn, is_filer)
     ).grid(row=0, column=1, padx=5)
 
     Button(
@@ -167,7 +188,7 @@ def open_window():
 
     Button(
         button_frame, text="Clear", width=10,
-        command=lambda: clear_fields(selected_id, name, contact, email, address, name_entry)
+        command=lambda: clear_fields(selected_id, name, contact, email, address, ntn, is_filer, name_entry)
     ).grid(row=0, column=3, padx=5)
 
     Button(
@@ -208,7 +229,7 @@ def open_window():
 
     tree.bind(
         "<<TreeviewSelect>>",
-        lambda event: select_customer(event, tree, name, contact, email, address, selected_id)
+        lambda event: select_customer(event, tree, name, contact, email, address, selected_id, ntn, is_filer)
     )
 # ==========================================================
 # =====  Function Customer Sales history  =========
@@ -222,7 +243,7 @@ def open_window():
 
         win = Toplevel()
         win.title(f"Sales History - {name.get()}")
-        size_and_center(win, width_ratio=0.7, height_ratio=0.7, resizable=True)
+        size_and_center(win, width_ratio=0.7, height_ratio=1, resizable=True)
 
         apply_app_style()
 
@@ -235,6 +256,12 @@ def open_window():
             header_frame, text=f"Sales History — {name.get()}",
             bg=PRIMARY, fg=WHITE, font=FONT_TITLE
         ).pack(side=LEFT, padx=20)
+
+        if is_filer.get():
+            Label(
+                header_frame, text=f"NTN: {ntn.get()}",
+                bg=PRIMARY, fg=WHITE, font=FONT_BODY
+            ).pack(side=RIGHT, padx=20)
 
         # ---------------- Table ----------------
         table_frame = Frame(win, bg=BACKGROUND)
@@ -284,6 +311,11 @@ def open_window():
             bg="#0B3B63", fg=WHITE, font=("Segoe UI", 16, "bold")
         ).pack(side=RIGHT, padx=20)
 
+        Button(
+        win, text="🖨 Print Statement", width=20,
+        command=lambda: generate_customer_statement(name.get(), rows)
+        ).pack(side=BOTTOM, pady=15)
+
     refresh_customers(tree)
     name_entry.focus_set()
 # =====================================
@@ -298,74 +330,3 @@ SALES_HISTORY_COLUMNS = [
     {"key": "tax_amount", "heading": "Tax Amt", "width": 110, "anchor": E, "stretch": True},
     {"key": "net_total", "heading": "Net Total", "width": 130, "anchor": E, "stretch": False},
 ]
-
-def open_customer_sales_history(selected_id, name):
-
-    if not selected_id.get():
-        from tkinter import messagebox
-        messagebox.showerror("Error", "Please select a customer first.")
-        return
-
-    win = Toplevel()
-    win.title(f"Sales History - {name.get()}")
-    size_and_center(win, width_ratio=0.45, height_ratio=0.55, resizable=True)
-
-    apply_app_style()
-
-    # ---------------- Header ----------------
-    header_frame = Frame(win, bg=PRIMARY, height=60)
-    header_frame.pack(fill=X)
-    header_frame.pack_propagate(False)
-
-    Label(
-        header_frame, text=f"Sales History — {name.get()}",
-        bg=PRIMARY, fg=WHITE, font=FONT_TITLE
-    ).pack(side=LEFT, padx=20)
-
-    # ---------------- Table ----------------
-    table_frame = Frame(win, bg=BACKGROUND)
-    table_frame.pack(fill=BOTH, expand=True, padx=15, pady=15)
-
-    scroll_y = Scrollbar(table_frame, orient=VERTICAL)
-    scroll_y.pack(side=RIGHT, fill=Y)
-
-    tree = build_treeview(table_frame, SALES_HISTORY_COLUMNS)
-    tree.configure(yscrollcommand=scroll_y.set)
-    scroll_y.config(command=tree.yview)
-    tree["displaycolumns"] = (
-        "sale_no", "date", "gross_total", "discount_amount", "tax_amount", "net_total"
-    )
-    tree.pack(fill=BOTH, expand=True)
-
-    rows = get_sales_by_customer(selected_id.get())
-
-    total_purchased = 0.0
-    for row in rows:
-        formatted_row = (
-            row[0], row[1], row[2],
-            format_currency(row[3]), format_currency(row[4]),
-            format_currency(row[5]), format_currency(row[6])
-        )
-        tree.insert("", "end", values=formatted_row)
-        total_purchased += row[6]
-
-    if not rows:
-        Label(
-            table_frame, text="No sales found for this customer.",
-            bg=BACKGROUND, fg="gray", font=FONT_BODY
-        ).pack(pady=10)
-
-    # ---------------- Total (highlighted bar) ----------------
-    total_frame = Frame(win, bg="#0B3B63", height=55)
-    total_frame.pack(side=BOTTOM, fill=X, padx=30, pady=(0, 15))
-    total_frame.pack_propagate(False)
-
-    Label(
-        total_frame, text="TOTAL PURCHASED BY THIS CUSTOMER",
-        bg="#0B3B63", fg=WHITE, font=FONT_BODY
-    ).pack(side=LEFT, padx=20)
-
-    Label(
-        total_frame, text=format_currency(total_purchased),
-        bg="#0B3B63", fg=WHITE, font=("Segoe UI", 16, "bold")
-    ).pack(side=RIGHT, padx=20)

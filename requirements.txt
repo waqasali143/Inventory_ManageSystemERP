@@ -2,3 +2,6 @@
 Python==3.12.3
 Pillow==12.3.0
 matplotlib==3.11.1
+fpdf2
+bcrypt
+openpyxl

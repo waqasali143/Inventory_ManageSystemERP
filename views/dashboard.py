@@ -6,18 +6,19 @@ from tkinter import *
 from tkinter import ttk
 
 try:
-    from PIL import Image, ImageTk
+    from PIL import Image as PILImage, ImageTk
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
 
+
 from datetime import datetime
 from time import strftime
-from services.settings_service import get_currency, set_currency, format_currency
-from views import product
-from views import supplier
-from views import customer
-from views import expense
+from services.settings_service import get_currency, set_currency, format_currency,get_app_title, get_business_info
+from services.auth_service import has_permission, get_current_user, logout
+from views import role as role_view
+from views import product, supplier, customer, expense, user, business_settings
+
 from views.report import open_report_window
 import sqlite3
 
@@ -45,7 +46,7 @@ class Dashboard:
         global dashboard_instance
         dashboard_instance = self
 
-        self.root = Toplevel()
+        self.root = Tk()
         self.active_sidebar_key = "dashboard"
         self.configure_window()
         self.center_window()
@@ -57,14 +58,31 @@ class Dashboard:
 # ON CLOSE
 # ===========================================================
     def on_close(self):
+        if hasattr(self, "datetime_job"):
+            self.root.after_cancel(self.datetime_job)
         event_bus.unsubscribe(self.load_dashboard_data)
         self.root.destroy()
+
+# =============================================================
+# ========= Handle Logout =====================================
+
+    def handle_logout(self):
+        if hasattr(self, "datetime_job"):
+            self.root.after_cancel(self.datetime_job)
+        event_bus.unsubscribe(self.load_dashboard_data)
+        logout()
+        self.root.destroy()
+
+        from views.login import open_login_window
+        from views.dashboard import open_dashboard
+        open_login_window(on_success=open_dashboard)
+
 # -------------------------------------------------------
 # Configure Window
 # -------------------------------------------------------
     def configure_window(self):
 
-        self.root.title("Inventory Management System")
+        self.root.title(get_app_title())
         self.root.geometry("1400x780")
         self.root.configure(bg=BACKGROUND)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -99,10 +117,7 @@ class Dashboard:
             bg=PRIMARY,
             height=75
         )
-        self.header.pack(
-            fill=X,
-            side=TOP
-        )
+        self.header.pack(fill=X,side=TOP)
         self.header.pack_propagate(False)
 
         self.create_logo()
@@ -113,6 +128,14 @@ class Dashboard:
 
         self.create_refresh_button()
         self.create_currency_selector()
+        self.create_user_badge()
+# =======================================================
+    def create_user_badge(self):
+            user = get_current_user()
+            Label(
+                self.header, text=f"👤 {user['full_name'] or user['id']} ({user['role']})",
+                bg=PRIMARY, fg=WHITE, font=FONT_BODY
+            ).pack(side=RIGHT, padx=15)
 # ===========================================================
 # REFRESH BUTTON
 # ===========================================================
@@ -186,32 +209,41 @@ class Dashboard:
             return
 
         try:
-            logo = Image.open("assets/logo.png")
-            logo = logo.resize((45, 45))
+            logo = PILImage.open("assets/logo.png")
+            logo = logo.resize((78, 47))  # keeps the logo's ~1.67:1 ratio
             self.logo_image = ImageTk.PhotoImage(logo)
 
+            logo_stack = Frame(self.header, bg=PRIMARY)
+            logo_stack.pack(side=LEFT, padx=20)
+
             Label(
-                self.header,
+                logo_stack,
                 image=self.logo_image,
                 bg=PRIMARY
-            ).pack(
-                side=LEFT,
-                padx=20
-            )
+            ).pack(anchor="w")
+
+            Label(
+                logo_stack,
+                text="Business Management System",
+                bg=PRIMARY, fg=WHITE,
+                font=("Segoe UI", 9)
+            ).pack(anchor="w")
+
         except Exception as e:
             print("Logo could not be loaded:", e)
+    
 # ===========================================================
 # HEADER TITLE
 # ===========================================================
     def create_title(self):
 
+        business_name = get_business_info().get("name", "").strip()
+        header_title = business_name if business_name else "Dashboard"
+
         Label(
-            self.header,
-            text="Inventory Management System",
-            bg=PRIMARY,
-            fg=WHITE,
-            font=("Segoe UI",20,"bold")
-        ).pack(side=LEFT, padx=(25, 10))
+            self.header, text=header_title,
+            bg=PRIMARY, fg=WHITE, font=FONT_TITLE
+        ).pack(side=LEFT, padx=20)
 # ===========================================================
 # HEADER DATE & TIME
 # ===========================================================
@@ -243,10 +275,8 @@ class Dashboard:
             text=current
         )
 
-        self.datetime_label.after(
-            1000,
-            self.update_datetime
-        )
+        self.datetime_job = self.root.after(1000, self.update_datetime)
+
 # ===========================================================
 # MAIN LAYOUT
 # ===========================================================
@@ -274,21 +304,47 @@ class Dashboard:
             bg=SIDEBAR,
             width=220
         )
-        self.sidebar.pack(
-            side=LEFT,
-            fill=Y
-        )
-
+        self.sidebar.pack(side=LEFT, fill=Y)
         self.sidebar.pack_propagate(False)
+
         Label(
-            self.sidebar,
-            text="MENU",
-            bg=SIDEBAR,
-            fg=WHITE,
-            font=("Segoe UI",18,"bold")
-        ).pack(
-            pady=25
+            self.sidebar, text="MENU", bg=SIDEBAR, fg=WHITE,
+            font=("Segoe UI", 18, "bold")
+        ).pack(pady=25)
+
+        # ---------------- Fixed Footer: Logout (never scrolls away) ----------------
+        footer = Frame(self.sidebar, bg=SIDEBAR)
+        footer.pack(side=BOTTOM, fill=X)
+
+        logout_btn = Button(
+            footer, text="🚪 Logout",
+            command=self.handle_logout,
+            font=FONT_BODY_BOLD, bg=SIDEBAR, fg=WHITE,
+            activebackground=PRIMARY, activeforeground=WHITE,
+            relief=FLAT, bd=0, cursor="hand2", anchor="w", padx=20
         )
+        logout_btn.pack(fill=X, ipady=12)
+
+        # ---------------- Scrollable Nav (grows with roles/permissions) ----------------
+        nav_canvas = Canvas(self.sidebar, bg=SIDEBAR, highlightthickness=0)
+        nav_canvas.pack(side=TOP, fill=BOTH, expand=True)
+
+        nav_frame = Frame(nav_canvas, bg=SIDEBAR)
+        nav_canvas.create_window((0, 0), window=nav_frame, anchor="nw", width=220)
+
+        def sync_scrollregion(event):
+            nav_canvas.configure(scrollregion=nav_canvas.bbox("all"))
+
+        nav_frame.bind("<Configure>", sync_scrollregion)
+
+        def on_mousewheel(event):
+            nav_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        nav_canvas.bind("<Enter>", lambda e: nav_canvas.bind_all("<MouseWheel>", on_mousewheel))
+        nav_canvas.bind("<Leave>", lambda e: nav_canvas.unbind_all("<MouseWheel>"))
+
+        # sidebar_button() will pack into this frame instead of self.sidebar directly
+        self.sidebar_nav = nav_frame
 
         self.create_sidebar_buttons()
 # ===========================================================
@@ -434,21 +490,24 @@ class Dashboard:
 # ACTION CARD
 # ===========================================================
     def action_card(
-        self,
-        parent,
-        icon,
-        title,
-        subtitle,
-        command
-    ):
+            self,
+            parent,
+            icon,
+            title,
+            subtitle,
+            command,
+            locked=False
+        ):
+        card_bg = "#F3F4F6" if locked else WHITE
+
         card = Frame(
             parent,
-            bg=WHITE,
+            bg=card_bg,
             width=180,
             height=130,
             bd=1,
             relief="solid",
-            cursor="hand2"
+            cursor="arrow" if locked else "hand2"
         )
         card.pack(
             side=LEFT,
@@ -457,33 +516,44 @@ class Dashboard:
         )
         card.pack_propagate(False)
 
+        icon_text = "🔒" if locked else icon
+        icon_color = "#9CA3AF" if locked else "black"
+
         Label(
             card,
-            text=icon,
-            bg=WHITE,
-            font=("Segoe UI Emoji",24)
+            text=icon_text,
+            bg=card_bg,
+            fg=icon_color,
+            font=("Segoe UI Emoji", 24)
         ).pack(
-            pady=(15,5)
+            pady=(15, 5)
         )
 
         Label(
             card,
             text=title,
-            bg=WHITE,
-            fg=TEXT,
-            font=("Segoe UI",11,"bold")
+            bg=card_bg,
+            fg="#9CA3AF" if locked else TEXT,
+            font=("Segoe UI", 11, "bold")
         ).pack()
 
         Label(
             card,
-            text=subtitle,
-            bg=WHITE,
+            text="No Access" if locked else subtitle,
+            bg=card_bg,
             fg="gray40",
-            font=("Segoe UI",9)
+            font=("Segoe UI", 9)
         ).pack(
-            pady=(3,0)
+            pady=(3, 0)
         )
 
+        if not locked:
+            def on_click(event):
+                command()
+
+            card.bind("<Button-1>", on_click)
+            for child in card.winfo_children():
+                child.bind("<Button-1>", on_click)
 # ===========================================================
 # CLICK EVENTS
 # ===========================================================
@@ -502,51 +572,33 @@ class Dashboard:
     def create_action_cards(self):
 
         self.action_card(
-            self.action_frame,
-            "📦",
-            "Products",
-            "Manage Products",
-            product.open_window
+            self.action_frame, "📦", "Products", "Manage Products",
+            product.open_window, locked=not has_permission("products")
         )
 
         self.action_card(
-            self.action_frame,
-            "👥",
-            "Customers",
-            "Manage Customers",
-            customer.open_window
+            self.action_frame, "👥", "Customers", "Manage Customers",
+            customer.open_window, locked=not has_permission("customers")
         )
 
         self.action_card(
-            self.action_frame,
-            "🚚",
-            "Suppliers",
-            "Manage Suppliers",
-            supplier.open_window
+            self.action_frame, "🚚", "Suppliers", "Manage Suppliers",
+            supplier.open_window, locked=not has_permission("suppliers")
         )
 
         self.action_card(
-            self.action_frame,
-            "💰",
-            "Sales",
-            "Create Invoice",
-            sales_window
+            self.action_frame, "💰", "Sales", "Create Invoice",
+            sales_window, locked=not has_permission("sales")
         )
 
         self.action_card(
-            self.action_frame,
-            "🛒",
-            "Purchase",
-            "Stock Entry",
-            purchase_window
+            self.action_frame, "🛒", "Purchase", "Stock Entry",
+            purchase_window, locked=not has_permission("purchase")
         )
 
         self.action_card(
-            self.action_frame,
-            "📊",
-            "Reports",
-            "View Reports",
-            command=open_report_window
+            self.action_frame, "📊", "Reports", "View Reports",
+            open_report_window, locked=not has_permission("reports")
         )
 # ===========================================================
 # DASHBOARD PANELS
@@ -783,7 +835,7 @@ class Dashboard:
                 command()
 
         btn = Button(
-            self.sidebar,
+            self.sidebar_nav,
             text=text,
             command=on_click,
             font=FONT_BODY_BOLD,
@@ -858,54 +910,38 @@ class Dashboard:
 
         self.sidebar_button("🏠 Dashboard", key="dashboard")
 
-        self.sidebar_button(
-            "📦 Products",
-            product.open_window,
-            key="products"
-        )
+        if has_permission("sales"):
+            self.sidebar_button("💰 Sales", sales_window, key="sales")
 
-        self.sidebar_button(
-            "👥 Customers",
-            customer.open_window,
-            key="customers"
-        )
+        if has_permission("purchase"):
+            self.sidebar_button("🛒 Purchase", purchase_window, key="purchase")
 
-        self.sidebar_button(
-            "🚚 Suppliers",
-            supplier.open_window,
-            key="suppliers"
-        )
-        self.sidebar_button(
-            "💸 Expenses", 
-            expense.open_window, 
-            key="expenses"
-            )
-        self.sidebar_button(
-            "💰 Sales",
-            sales_window,
-            key="sales"
-        )
+        if has_permission("products"):
+            self.sidebar_button("📦 Products", product.open_window, key="products")
 
-        self.sidebar_button(
-            "🛒 Purchase",
-            purchase_window,
-            key="purchase"
-        )
+        if has_permission("customers"):
+            self.sidebar_button("👥 Customers", customer.open_window, key="customers")
 
-        self.sidebar_button(
-            "📊 Reports",
-            command=open_report_window,
-            key="reports"
-        )
-        self.create_reports_menu()
-        
-        self.sidebar_button(
-            "🚪 Logout",
-            self.root.destroy
-        )
+        if has_permission("suppliers"):
+            self.sidebar_button("🚚 Suppliers", supplier.open_window, key="suppliers")
+
+        if has_permission("expenses"):
+            self.sidebar_button("💸 Expenses", expense.open_window, key="expenses")
+
+        if has_permission("users"):
+            self.sidebar_button("👤 Users", user.open_window, key="users")
+            self.sidebar_button("🔑 Roles", role_view.open_window, key="roles")
+
+        if has_permission("business_settings"):
+            self.sidebar_button("⚙ Business Settings", business_settings.open_window, key="business_settings")
+
+        if has_permission("reports"):
+            self.sidebar_button("📊 Reports", command=open_report_window, key="reports")
+            self.create_reports_menu()
+                    
 # ===========================================================
 # DASHBOARD LAUNCHER
 # ===========================================================
 def open_dashboard():
-
     Dashboard()
+    mainloop()

@@ -8,7 +8,7 @@ def fetch_suppliers(search_term=None):
     cursor = conn.cursor()
 
     base_query = """
-        SELECT id, name, contact, email, address, status
+        SELECT id, name, contact, email, address, status, ntn, is_filer
         FROM suppliers
     """
     if search_term:
@@ -45,29 +45,29 @@ def fetch_supplier_by_name(name, exclude_id=None):
 
     return row
 
-def insert_supplier(name, contact, email, address):
+def insert_supplier(name, contact, email, address, ntn="", is_filer=0):
 
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO suppliers(name, contact, email, address)
-        VALUES (?, ?, ?, ?)
-    """, (name, contact, email, address))
+        INSERT INTO suppliers(name, contact, email, address, ntn, is_filer)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (name, contact, email, address, ntn, is_filer))
 
     conn.commit()
     conn.close()
 
-def update_supplier(supplier_id, name, contact, email, address):
+def update_supplier(supplier_id, name, contact, email, address, ntn="", is_filer=0):
 
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute("""
         UPDATE suppliers
-        SET name=?, contact=?, email=?, address=?
+        SET name=?, contact=?, email=?, address=?, ntn=?, is_filer=?
         WHERE id=?
-    """, (name, contact, email, address, supplier_id))
+    """, (name, contact, email, address, ntn, is_filer, supplier_id))
 
     conn.commit()
     conn.close()
@@ -107,3 +107,18 @@ def set_supplier_status(supplier_id, status):
 
     conn.commit()
     conn.close()
+# ============================================================
+# = = = = This Function Use For Sales Window = = = = 
+# ============================================================
+
+def fetch_supplier_filer_status(supplier_id):
+    """Returns True if the supplier is a Filer, False otherwise."""
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT is_filer FROM suppliers WHERE id = ?", (supplier_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    return bool(row[0]) if row else False

@@ -21,6 +21,16 @@ from utils import event_bus
 def load_suppliers():
     return repo.fetch_active_suppliers()
 
+def get_supplier_id_by_name(supplier_name):
+    """Resolve a supplier's ID from the name shown in the combobox.
+
+    Same pattern as sales_service.get_customer_id_by_name - reuses the
+    repo lookup save_purchase() already relies on, so Purchase can
+    fetch the supplier's filer status for tax auto-fill without a
+    separate id/name map.
+    """
+    return repo.fetch_supplier_id(supplier_name)
+
 def load_products():
     return repo.fetch_active_products()
 
@@ -30,8 +40,8 @@ def get_product_cost_price(product_name):
 def get_product_stock(product_name):
     return repo.fetch_product_stock(product_name)
 
-def get_purchase_history(search_term=None):
-    return repo.fetch_purchase_history(search_term)
+def get_purchase_history(search_term=None, date_from=None, date_to=None):
+    return repo.fetch_purchase_history(search_term, date_from, date_to)
 
 def get_purchase_header(purchase_id):
     return repo.fetch_purchase_header(purchase_id)
@@ -244,12 +254,12 @@ def save_purchase(supplier, invoice_no, purchase_date, cart_tree, summary):
         cart_items = _extract_cart_items(cart_tree)
         repo.insert_purchase_items(cursor, purchase_id, cart_items)
 
-        for product_id, _purchase_price, quantity, _subtotal in cart_items:
+        for product_id, purchase_price, quantity, _subtotal in cart_items:
             repo.increment_product_stock(cursor, product_id, quantity)
+            repo.update_product_cost_price(cursor, product_id, purchase_price)
 
         clear_purchase_form(supplier, cart_tree, summary)
         invoice_no.set("")
-        purchase_date.set("")
 
         conn.commit()
         event_bus.publish()

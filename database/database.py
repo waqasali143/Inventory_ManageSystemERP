@@ -1,5 +1,7 @@
 
+from database.db_config import DB_PATH
 import sqlite3
+import bcrypt
 # =====================================
 # Database Connection
 # =====================================
@@ -7,10 +9,12 @@ def get_connection():
     """
     Return SQLite database connection.
     """
-    conn = sqlite3.connect("database/inventory.db")
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 10000")
     return conn
-
+# =====================================================
 def connect():
 
     conn = get_connection()
@@ -24,6 +28,8 @@ def connect():
         name TEXT NOT NULL UNIQUE,
 
         description TEXT DEFAULT '',
+
+        barcode TEXT DEFAULT '',
 
         cost_price REAL NOT NULL,
 
@@ -62,6 +68,17 @@ def connect():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
+
+# ============================================================
+    cursor.execute("SELECT id, password FROM users")
+    all_users = cursor.fetchall()
+
+    for user_id, stored_password in all_users:
+        # bcrypt hashes always start with "$2" - if it doesn't, this
+        # is old plain-text data that needs to be hashed once.
+        if not stored_password.startswith("$2"):
+            hashed = bcrypt.hashpw(stored_password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+            cursor.execute("UPDATE users SET password=? WHERE id=?", (hashed, user_id))
 # =====================================
 # Settings Table
 # (key-value store for system-wide settings like currency,
@@ -74,14 +91,73 @@ def connect():
     )
     """)
 
+    default_settings = {
+        "currency": "Rs",
+        "filer_tax_rate": "2",
+        "non_filer_tax_rate": "4",
+        "business_name": "",
+        "business_address": "",
+        "business_phone": "",
+        "business_ntn": "",
+    }
+
+    for key, value in default_settings.items():
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        if cursor.fetchone() is None:
+            cursor.execute(
+                "INSERT INTO settings(key, value) VALUES (?, ?)", (key, value)
+            )
+# =====================================
+# Roles Table
+# =====================================
     cursor.execute("""
-        SELECT value FROM settings WHERE key = 'currency'
+    CREATE TABLE IF NOT EXISTS roles(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
     """)
 
-    if cursor.fetchone() is None:
-        cursor.execute("""
-            INSERT INTO settings(key, value) VALUES ('currency', 'Rs')
-        """)
+# =====================================
+# Role Permissions Table
+# (one row per (role, section) that IS allowed)
+# =====================================
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS role_permissions(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role_id INTEGER NOT NULL,
+        section TEXT NOT NULL,
+        FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE CASCADE
+    )
+    """)
+
+# =====================================
+# Seed default roles (only if roles table is empty)
+# =====================================
+    cursor.execute("SELECT COUNT(*) FROM roles")
+    if cursor.fetchone()[0] == 0:
+
+        cursor.execute("INSERT INTO roles(name) VALUES ('Admin')")
+        admin_role_id = cursor.lastrowid
+
+        cursor.execute("INSERT INTO roles(name) VALUES ('Cashier')")
+        cashier_role_id = cursor.lastrowid
+
+        all_sections = [
+            "products", "customers", "suppliers", "sales", "purchase",
+            "expenses", "users", "business_settings", "reports"
+        ]
+        for section in all_sections:
+            cursor.execute(
+                "INSERT INTO role_permissions(role_id, section) VALUES (?, ?)",
+                (admin_role_id, section)
+            )
+
+        for section in ["sales", "purchase"]:
+            cursor.execute(
+                "INSERT INTO role_permissions(role_id, section) VALUES (?, ?)",
+                (cashier_role_id, section)
+            )
 # ===================================================================
 
     cursor.execute("""
@@ -117,6 +193,10 @@ def connect():
 
         address TEXT,
 
+        ntn TEXT DEFAULT '',
+
+        is_filer INTEGER NOT NULL DEFAULT 0,
+
         status TEXT NOT NULL DEFAULT 'Active',
 
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -124,6 +204,19 @@ def connect():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+# =======================================================
+
+    suppliers_existing_columns = [
+        row[1] for row in cursor.execute(
+            "PRAGMA table_info(suppliers)"
+        ).fetchall()
+    ]
+
+    if "ntn" not in suppliers_existing_columns:
+        cursor.execute("ALTER TABLE suppliers ADD COLUMN ntn TEXT DEFAULT ''")
+
+    if "is_filer" not in suppliers_existing_columns:
+        cursor.execute("ALTER TABLE suppliers ADD COLUMN is_filer INTEGER NOT NULL DEFAULT 0")
 # ========================================================
 #  Customer Table
 # ----------------------------------------------
@@ -140,6 +233,10 @@ def connect():
 
         address TEXT,
 
+        ntn TEXT DEFAULT '',
+
+        is_filer INTEGER NOT NULL DEFAULT 0,
+
         status TEXT NOT NULL DEFAULT 'Active',
 
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -147,6 +244,21 @@ def connect():
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
+# ==========================================================
+# = = = = Customer Table Migration = = = =
+# ==========================================================
+
+    customers_existing_columns = [
+        row[1] for row in cursor.execute(
+            "PRAGMA table_info(customers)"
+        ).fetchall()
+    ]
+
+    if "ntn" not in customers_existing_columns:
+        cursor.execute("ALTER TABLE customers ADD COLUMN ntn TEXT DEFAULT ''")
+
+    if "is_filer" not in customers_existing_columns:
+        cursor.execute("ALTER TABLE customers ADD COLUMN is_filer INTEGER NOT NULL DEFAULT 0")
 # =====================================
 # Purchase Table
 # =====================================
@@ -191,6 +303,18 @@ def connect():
 # (adds new columns to an already-existing table
 #  created before discount_amount/tax_amount existed)
 # =====================================
+    
+    products_existing_columns = [
+        row[1] for row in cursor.execute(
+            "PRAGMA table_info(products)"
+        ).fetchall()
+    ]
+
+    if "barcode" not in products_existing_columns:
+        cursor.execute(
+            "ALTER TABLE products ADD COLUMN barcode TEXT DEFAULT ''"
+        )
+# ==================================================
     existing_columns = [
         row[1] for row in cursor.execute(
             "PRAGMA table_info(purchases)"
@@ -389,3 +513,4 @@ def connect():
     conn.close()
 print("Database Connected Successfully")
 connect()
+# =============================================

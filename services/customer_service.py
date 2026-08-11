@@ -29,18 +29,23 @@ def load_customers(search_term=None):
 # =====================================
 # Save Customer
 # =====================================
-def save_customer(name, contact, email, address):
+def save_customer(name, contact, email, address, ntn=None, is_filer=None):
 
     is_valid, message = validate_customer_data(name, contact)
     if not is_valid:
         messagebox.showerror("Validation Error", message)
         return False
 
+    ntn_value = ntn.get().strip() if ntn else ""
+    filer_value = int(is_filer.get()) if is_filer else 0
+
     repo.insert_customer(
         name.get().strip(),
         contact.get().strip(),
         email.get().strip(),
-        address.get().strip()
+        address.get().strip(),
+        ntn_value,
+        filer_value
     )
 
     event_bus.publish()
@@ -51,7 +56,7 @@ def save_customer(name, contact, email, address):
 # =====================================
 # Update Customer
 # =====================================
-def update_customer(selected_id, name, contact, email, address):
+def update_customer(selected_id, name, contact, email, address, ntn=None, is_filer=None):
 
     if not selected_id.get():
         messagebox.showerror("Error", "Please select a customer first.")
@@ -62,12 +67,17 @@ def update_customer(selected_id, name, contact, email, address):
         messagebox.showerror("Validation Error", message)
         return False
 
+    ntn_value = ntn.get().strip() if ntn else ""
+    filer_value = int(is_filer.get()) if is_filer else 0
+
     repo.update_customer(
         selected_id.get(),
         name.get().strip(),
         contact.get().strip(),
         email.get().strip(),
-        address.get().strip()
+        address.get().strip(),
+        ntn_value,
+        filer_value
     )
 
     event_bus.publish()
@@ -116,3 +126,11 @@ def delete_customer(selected_id):
             return True
 
     return False
+# ===================================================
+# = = = = = wrapper = = = = =
+
+def get_customer_filer_status(customer_id):
+    return repo.fetch_customer_filer_status(customer_id)
+# ===========================================================
+def get_customer_ntn(customer_id):
+    return repo.fetch_customer_ntn(customer_id)

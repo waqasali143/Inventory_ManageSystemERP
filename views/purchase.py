@@ -3,6 +3,9 @@ from tkinter import ttk
 from tkinter import messagebox
 from tkinter import CENTER, E
 from utils.tree_helpers import clear_treeview 
+from utils.export_helpers import export_to_excel
+from utils.branding_helpers import add_branding_strip
+
 # ==========================================
 # Third Party
 # ==========================================
@@ -13,17 +16,21 @@ from utils.tree_helpers import clear_treeview
 # ==========================================
 # from repositories import purchase_repository as repo
 from utils.tree_helpers import build_treeview, reload_treeview
-from utils.ui_helpers import add_buttons, labeled_entry
+from utils.ui_helpers import add_buttons, labeled_entry, labeled_date_picker
+
+from services.invoice_service import generate_purchase_receipt, generate_purchase_report_pdf
 
 from services.settings_service import format_currency
 from services.purchase_summary import PurchaseSummary
 from utils.window_helpers import size_and_center
 from services.purchase_service import (
     calculate_purchase_totals, remove_cart_item, clear_cart, save_purchase, 
-    load_suppliers, load_products, get_product_cost_price, 
+    load_suppliers, get_supplier_id_by_name, load_products, get_product_cost_price, 
     get_product_stock, get_purchase_history, get_purchase_header, get_purchase_items,
     get_purchase_items_for_return, process_purchase_return,get_all_purchase_returns
 )
+from services.supplier_service import get_supplier_filer_status
+from services.tax_service import get_applicable_tax_rate
 # =====================================
 # Product Selected
 # =====================================
@@ -267,6 +274,8 @@ def add_to_cart(
 def purchase_window():
 
     win = Toplevel()
+    add_branding_strip(win)
+    
     win.title("Purchase Management")
     win.state("zoomed")   # window
 
@@ -289,7 +298,6 @@ def purchase_window():
 
     supplier = StringVar()
     invoice_no = StringVar()
-    purchase_date = StringVar()
     product = StringVar()
     purchase_price = StringVar()
     quantity = StringVar()
@@ -399,7 +407,7 @@ def purchase_window():
     # ------------------------------------
     #====  Handle ==========
     def handle_save_purchase():
-        save_purchase(supplier, invoice_no, purchase_date, cart_tree, summary)
+        save_purchase(supplier, invoice_no, purchase_date_picker, cart_tree, summary)
         product.set("")
         purchase_price.set("")
         quantity.set("")
@@ -484,11 +492,7 @@ def purchase_window():
         text="Purchase Date"
         ).grid(row=1, column=2, padx=10, pady=8, sticky="w")
 
-    purchase_date_entry = Entry(
-        purchase_frame,
-        textvariable=purchase_date
-    )
-    purchase_date_entry.grid(row=1, column=3, padx=10, pady=8, sticky="ew")
+    purchase_date_picker = labeled_date_picker(purchase_frame, "Purchase Date", 1, 2)
 
     Label(
         purchase_frame,
@@ -628,6 +632,28 @@ def purchase_window():
 #  Supplier , Products load in combobox
 # -------------------------------------------
     supplier_combo["values"] = load_suppliers()
+
+# ---------------------------
+#  Supplier Selected
+#  (auto-fills Tax % based on the supplier's filer status —
+#  summary/refresh_totals already exist above, so it's safe here)
+# ---------------------------
+    def on_supplier_selected(event):
+
+        supplier_name = supplier_combo.get()
+        supplier_id = get_supplier_id_by_name(supplier_name)
+
+        if supplier_id is None:
+            return
+
+        is_filer = get_supplier_filer_status(supplier_id)
+        tax_rate = get_applicable_tax_rate(is_filer)
+
+        summary.tax.set(str(tax_rate))
+        refresh_totals()
+
+    supplier_combo.bind("<<ComboboxSelected>>", on_supplier_selected)
+
     products = load_products()
 
     product_map = {}
@@ -656,18 +682,8 @@ def purchase_window():
 # =====================================
 # Load Purchase History (into Treeview)
 # =====================================
-def load_purchase_history(history_tree, search_term=None):
-    rows = get_purchase_history(search_term)
-    formatted_rows = [
-        (
-            row[0], row[1], row[2],
-            format_currency(row[3]), row[4], format_currency(row[5]),
-            row[6], format_currency(row[7]), format_currency(row[8]),
-            row[9], row[10], row[11]
-        )
-        for row in rows
-    ]
-    reload_treeview(history_tree, formatted_rows)
+def load_purchase_history(history_tree, search_term=None, date_from=None, date_to=None):
+    reload_treeview(history_tree, get_purchase_history(search_term, date_from, date_to))
 
 # =====================================
 # Purchase History Window
@@ -675,6 +691,7 @@ def load_purchase_history(history_tree, search_term=None):
 def purchase_history():
 
     history_win = Toplevel()
+    history_win.title("Purchase History")
     screen_width = history_win.winfo_screenwidth()
     screen_height = history_win.winfo_screenheight()
 
@@ -699,6 +716,49 @@ def purchase_history():
     purchase_search = StringVar()
 
     Entry(search_frame, textvariable=purchase_search, width=30).grid(row=0, column=1, padx=5)
+
+    date_from_picker = labeled_date_picker(search_frame, "From", 1, 0)
+    date_to_picker = labeled_date_picker(search_frame, "To", 1, 2)
+
+    Button(
+        search_frame, text="Filter by Date", width=14,
+        command=lambda: load_purchase_history(
+            history_tree, date_from=date_from_picker.get(), date_to=date_to_picker.get()
+        )
+    ).grid(row=1, column=4, padx=5)
+    #========================================================
+    Button(
+        search_frame, text="🖨 Print Report", width=14,
+        command=lambda: generate_purchase_report_pdf(
+            get_purchase_history(None, date_from_picker.get(), date_to_picker.get()),
+            date_from_picker.get(), date_to_picker.get()
+        )
+    ).grid(row=1, column=5, padx=5)
+
+    Button(
+        search_frame, text="🖨 Print Selected", width=14,
+        command=lambda: print_selected_receipt()
+    ).grid(row=1, column=6, padx=5)
+
+    Button(
+        search_frame, text="🗂 Export to Excel", width=16,
+        command=lambda: export_current_history()
+    ).grid(row=1, column=7, padx=5)
+    # ===========================================
+    # ======= Helper function Excel export ======
+    def export_current_history():
+        rows = get_purchase_history(
+            purchase_search.get().strip() or None,
+            date_from_picker.get(), date_to_picker.get()
+        )
+
+        headers = [
+            "ID", "Purchase No", "Supplier", "Gross Total",
+            "Discount %", "Discount Amt", "Tax %", "Tax Amt",
+            "Net Total", "Date", "Qty", "Returned Qty"
+        ]
+
+        export_to_excel(headers, rows, "Purchase_History")
 # ===========================================
         # Button
 # ============================================
@@ -727,7 +787,7 @@ def purchase_history():
     {"key": "supplier","heading": "Supplier","width": 110, "min_width": 105, 
      "anchor": CENTER},
     {"key": "gross_total","heading": "Gross Total", "width": 105,"min_width": 90,
-        "anchor": E},
+        "anchor": CENTER},
     {"key": "discount","heading": "Discount %","width": 75,"min_width": 65,
         "anchor": CENTER},
     {"key": "discount_amount","heading": "Discount Amount","width": 115,
@@ -752,13 +812,23 @@ def purchase_history():
     scroll_x.config(command=history_tree.xview)
 
     # history_tree["show"] = "headings"
-    history_tree.pack(side=TOP,fill=BOTH,expand=True)
     scroll_y.pack(side=RIGHT,fill=Y)
     scroll_x.pack(side=BOTTOM,fill=X)
+    history_tree.pack(side=TOP,fill=BOTH,expand=True)
+
 
     load_purchase_history(history_tree)
 
     history_tree.bind("<Double-1>", show_purchase_details)
+# ==============================================================================
+
+    def print_selected_receipt():
+        selected = history_tree.focus()
+        if not selected:
+            messagebox.showerror("Error", "Please select a purchase from the list first.")
+            return
+        values = history_tree.item(selected, "values")
+        generate_purchase_receipt(values[0])
 
 
 # =====================================
@@ -786,15 +856,15 @@ def show_purchase_details(event):
     purchase_id = values[0]
 
     (
-    purchase_no, invoice_no_value, supplier_name, purchase_date,
+    purchase_no, invoice_no_value, supplier_name, purchase_date_picker,
     gross_total, discount, discount_amount,
     tax, tax_amount, net_total
     ) = get_purchase_header(purchase_id)
 
     details_win = Toplevel()
     details_win.title("Purchase Details")
-    details_win.geometry("850x550")
-    details_win.resizable(False, False)
+    size_and_center(details_win, width_ratio=0.7, height_ratio=1, resizable=True)
+
 
     header_frame = LabelFrame(details_win, text="Purchase Information", padx=10, pady=10)
     header_frame.pack(fill="x", padx=10, pady=10)
@@ -811,7 +881,7 @@ def show_purchase_details(event):
     ).grid(row=1, column=1, padx=30, pady=5, sticky="w")
 
     Label(
-        header_frame, text=f"Purchase Date : {purchase_date}", font=("Arial", 11)
+        header_frame, text=f"Purchase Date : {purchase_date_picker}", font=("Arial", 11)
     ).grid(row=2, column=0, padx=10, pady=5, sticky="w")
 # =========================================================================================
     # Items Frame
@@ -854,6 +924,12 @@ def show_purchase_details(event):
     ).grid(row=0, column=3, padx=20, pady=5, sticky="w")
 
     totals_frame.pack(fill="x", padx=10, pady=(0, 10))
+# ===============================================================
+# ======== Print Button ==================
+    Button(
+        details_win, text="🖨 Print Receipt", width=20,
+        command=lambda: generate_purchase_receipt(purchase_id)
+    ).pack(side=BOTTOM, pady=(0, 15))
     
 # =====================================
 # Purchase Return Window
