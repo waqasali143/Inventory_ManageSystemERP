@@ -1,6 +1,7 @@
 
 from tkinter import messagebox
 from repositories import supplier_repository as repo
+from services import credit_service
 from utils import event_bus
 
 # =====================================
@@ -143,3 +144,10 @@ def delete_supplier(selected_id):
 # = = == = wrapper = = = = = 
 def get_supplier_filer_status(supplier_id):
     return repo.fetch_supplier_filer_status(supplier_id)
+
+# =====================================
+# Credit Balance (thin wrapper so supplier.py only ever imports
+# from "services", never directly from "credit_service"/repositories)
+# =====================================
+def get_supplier_balance(supplier_id):
+    return credit_service.get_supplier_balance(supplier_id)

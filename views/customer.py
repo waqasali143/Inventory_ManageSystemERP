@@ -290,21 +290,33 @@ def open_window():
         tree.configure(yscrollcommand=scroll_y.set)
         scroll_y.config(command=tree.yview)
         tree["displaycolumns"] = (
-            "sale_no", "date", "gross_total", "discount_amount", "tax_amount", "net_total"
+            "sale_no", "date", "gross_total", "discount_amount", "tax_amount", "net_total",
+            "payment_status", "amount_paid", "balance_due"
         )
         tree.pack(fill=BOTH, expand=True)
 
         rows = get_sales_by_customer(selected_id.get())
 
+        # get_sales_by_customer() returns 9 fields per row:
+        # id, sale_no, date, gross_total, discount_amount, tax_amount,
+        # net_total, payment_status, balance_due
+        # Amount Paid isn't returned directly, but it's derivable
+        # (same approach as the Supplier Purchase History fix).
         total_purchased = 0.0
         for row in rows:
+            net_total = row[6]
+            payment_status = row[7]
+            balance_due = row[8]
+            amount_paid = net_total - balance_due
+
             formatted_row = (
                 row[0], row[1], row[2],
                 format_currency(row[3]), format_currency(row[4]),
-                format_currency(row[5]), format_currency(row[6])
+                format_currency(row[5]), format_currency(net_total),
+                payment_status, format_currency(amount_paid), format_currency(balance_due)
             )
             tree.insert("", "end", values=formatted_row)
-            total_purchased += row[6]
+            total_purchased += net_total
 
         if not rows:
             Label(
@@ -343,6 +355,9 @@ SALES_HISTORY_COLUMNS = [
     {"key": "date", "heading": "Date", "width": 170, "stretch": False},
     {"key": "gross_total", "heading": "Gross Total", "width": 110, "anchor": E, "stretch": False},
     {"key": "discount_amount", "heading": "Discount Amt", "width": 120, "anchor": E, "stretch": False},
-    {"key": "tax_amount", "heading": "Tax Amt", "width": 110, "anchor": E, "stretch": True},
+    {"key": "tax_amount", "heading": "Tax Amt", "width": 110, "anchor": E, "stretch": False},
     {"key": "net_total", "heading": "Net Total", "width": 130, "anchor": E, "stretch": False},
+    {"key": "payment_status", "heading": "Payment", "width": 90, "anchor": CENTER, "stretch": False},
+    {"key": "amount_paid", "heading": "Amount Paid", "width": 110, "anchor": E, "stretch": False},
+    {"key": "balance_due", "heading": "Balance Due", "width": 110, "anchor": E, "stretch": True},
 ]

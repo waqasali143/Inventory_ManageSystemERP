@@ -35,6 +35,32 @@ def fetch_totals(start_date, end_date):
     return total_sales, total_purchases, total_expenses
 
 # =====================================================================
+# TAX TOTALS (Sales tax collected vs Purchase tax paid) for a date range
+# =====================================================================
+def fetch_tax_totals(start_date, end_date):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT COALESCE(SUM(tax_amount), 0)
+        FROM sales
+        WHERE date(sale_date) BETWEEN ? AND ?
+    """, (start_date, end_date))
+    sales_tax = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT COALESCE(SUM(tax_amount), 0)
+        FROM purchases
+        WHERE date(purchase_date) BETWEEN ? AND ?
+    """, (start_date, end_date))
+    purchase_tax = cursor.fetchone()[0]
+
+    conn.close()
+
+    return sales_tax, purchase_tax
+
+# =====================================================================
 # PROFIT / LOSS
 # Gross Profit = Sum((sale_price - cost_price) * quantity) for all
 #                sale_items in the date range
@@ -148,7 +174,7 @@ def fetch_product_wise_raw(start_date, end_date):
     """
     Returns raw rows needed to build a per-product profit breakdown:
     (product_name, quantity, sale_price, cost_price, subtotal,
-     sale_gross_total, sale_discount_amount)
+     sale_gross_total, sale_discount_amount, sale_net_total, sale_amount_paid)
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -161,7 +187,9 @@ def fetch_product_wise_raw(start_date, end_date):
             si.cost_price,
             si.subtotal,
             s.gross_total,
-            s.discount_amount
+            s.discount_amount,
+            s.net_total,
+            s.amount_paid
         FROM sale_items si
         INNER JOIN sales s ON si.sale_id = s.id
         INNER JOIN products p ON si.product_id = p.id

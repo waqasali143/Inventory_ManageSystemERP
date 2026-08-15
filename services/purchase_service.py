@@ -216,7 +216,8 @@ def _extract_cart_items(cart_tree):
 # (orchestrates: validate -> generate no -> save header -> save items
 #  -> update stock -> commit)
 # =====================================
-def save_purchase(supplier, invoice_no, purchase_date, cart_tree, summary):
+def save_purchase(supplier, invoice_no, purchase_date, cart_tree, summary,
+                   payment_type=None, amount_paid_str=None):
 
     if not validate_purchase(supplier, cart_tree):
         return
@@ -228,14 +229,39 @@ def save_purchase(supplier, invoice_no, purchase_date, cart_tree, summary):
 
     supplier_name = supplier.get().strip()
 
+    gross, discount, discount_amount, tax, tax_amount, net_total = summary.as_floats()
+
+    # payment_type/amount_paid_str are optional so save_purchase still
+    # works from any caller that hasn't been updated for Credit yet -
+    # defaults to a fully-paid Cash purchase, same as before this
+    # feature existed.
+    is_credit = payment_type is not None and payment_type.get() == "Credit"
+
+    if is_credit:
+        try:
+            amount_paid = float(amount_paid_str.get()) if amount_paid_str else 0.0
+        except ValueError:
+            messagebox.showerror("Error", "Amount Paid must be a number.")
+            return
+
+        if amount_paid < 0 or amount_paid > net_total:
+            messagebox.showerror(
+                "Error", "Amount Paid must be between 0 and the Net Total."
+            )
+            return
+
+        payment_status = "Paid" if amount_paid >= net_total else \
+                          ("Partial" if amount_paid > 0 else "Credit")
+    else:
+        amount_paid = net_total
+        payment_status = "Paid"
+
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
         purchase_no = repo.generate_purchase_no()
         supplier_id = repo.fetch_supplier_id(supplier_name)
-
-        gross, discount, discount_amount, tax, tax_amount, net_total = summary.as_floats()
 
         purchase_id = repo.insert_purchase_header(
             cursor,
@@ -248,18 +274,41 @@ def save_purchase(supplier, invoice_no, purchase_date, cart_tree, summary):
             discount_amount,
             tax,
             tax_amount,
-            net_total
+            net_total,
+            payment_status,
+            amount_paid
         )
 
         cart_items = _extract_cart_items(cart_tree)
         repo.insert_purchase_items(cursor, purchase_id, cart_items)
 
-        for product_id, purchase_price, quantity, _subtotal in cart_items:
+        # cost_price is meant to reflect the true "landed cost" per unit
+        # - what this item actually cost the business, including its
+        # proportional share of the invoice's tax (a real added cost)
+        # and net of its share of any discount received (a real
+        # reduction) - not just the raw negotiated purchase price.
+        # purchase_items.purchase_price above keeps recording the raw
+        # price actually invoiced, unchanged - this only affects the
+        # product's cost basis used for COGS/profit going forward.
+        for product_id, purchase_price, quantity, subtotal in cart_items:
             repo.increment_product_stock(cursor, product_id, quantity)
-            repo.update_product_cost_price(cursor, product_id, purchase_price)
+
+            if gross > 0:
+                allocated_discount = (subtotal / gross) * discount_amount
+                allocated_tax = (subtotal / gross) * tax_amount
+            else:
+                allocated_discount = 0.0
+                allocated_tax = 0.0
+
+            landed_cost_total = subtotal - allocated_discount + allocated_tax
+            landed_cost_per_unit = landed_cost_total / quantity if quantity else purchase_price
+
+            repo.update_product_cost_price(cursor, product_id, landed_cost_per_unit)
 
         clear_purchase_form(supplier, cart_tree, summary)
         invoice_no.set("")
+        if amount_paid_str is not None:
+            amount_paid_str.set("0")
 
         conn.commit()
         event_bus.publish()

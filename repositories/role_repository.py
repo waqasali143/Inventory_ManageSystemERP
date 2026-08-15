@@ -11,6 +11,7 @@ ALL_SECTIONS = [
     ("users", "User Management"),
     ("business_settings", "Business Settings"),
     ("reports", "Reports & History"),
+    ("credit", "Credit Ledger"),
 ]
 
 def fetch_roles():

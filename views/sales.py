@@ -1,4 +1,3 @@
-
 from tkinter import *
 from tkinter import ttk
 
@@ -151,6 +150,41 @@ def sales_window():
         state="readonly", justify="right", font=("Arial", 10, "bold")
     ).grid(row=1, column=5, padx=5, pady=5)
 
+# ---------------------------------
+# Payment Type (Cash / Credit)
+# ---------------------------------
+    payment_type = StringVar(value="Cash")
+    amount_paid = StringVar(value="0")
+
+    Label(totals_frame, text="Payment").grid(row=2, column=0, padx=5, pady=5)
+
+    payment_frame = Frame(totals_frame)
+    payment_frame.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+
+    amount_paid_entry = Entry(totals_frame, textvariable=amount_paid, width=16, justify="right")
+
+    def on_payment_type_change():
+        if payment_type.get() == "Credit":
+            amount_paid_entry.config(state="normal")
+            amount_paid.set("0")
+        else:
+            amount_paid.set(str(net_display.get()))
+            amount_paid_entry.config(state="disabled")
+
+    Radiobutton(
+        payment_frame, text="Cash", variable=payment_type, value="Cash",
+        command=on_payment_type_change
+    ).pack(side=LEFT)
+
+    Radiobutton(
+        payment_frame, text="Credit", variable=payment_type, value="Credit",
+        command=on_payment_type_change
+    ).pack(side=LEFT, padx=(10, 0))
+
+    Label(totals_frame, text="Amount Paid Now").grid(row=2, column=2, padx=5, pady=5)
+    amount_paid_entry.grid(row=2, column=3, padx=5, pady=5)
+    amount_paid_entry.config(state="disabled")  # Cash is selected by default
+
 # =====================================
 # Sales Cart Frame
 # =====================================
@@ -267,7 +301,11 @@ def sales_window():
 #   Bound on cart_tree itself, not the window - so it never fires
 #   while the user is deleting text inside a normal Entry field.
 # ===========================
-    cart_tree.bind("<Delete>", lambda event: remove_cart_item(cart_tree, summary))
+    def handle_remove_cart_item():
+        remove_cart_item(cart_tree, summary)
+        refresh_totals()
+
+    cart_tree.bind("<Delete>", lambda event: handle_remove_cart_item())
 # ===========================
 #   Customer Field
 # ==========================
@@ -521,9 +559,12 @@ def sales_window():
 #   Save Handler
 # ===========================
     def handle_save():
-        if save_sale(customer, cart_tree, summary):
+        if save_sale(customer, cart_tree, summary, payment_type, amount_paid):
             clear_sale_form(customer, product, quantity, sale_price, 
                             available_stock, cart_tree, summary)
+            refresh_totals()
+            payment_type.set("Cash")
+            on_payment_type_change()
 
 # ===========================
 #   Keyboard Shortcuts
@@ -540,11 +581,15 @@ def sales_window():
                 return
         win.destroy()
 
+    def handle_new_sale():
+        clear_sale_form(customer, product, quantity, sale_price, available_stock, cart_tree, summary)
+        refresh_totals()
+        payment_type.set("Cash")
+        on_payment_type_change()
+
     bind_shortcuts(win, {
         "<F2>": handle_save,
-        "<F3>": lambda: clear_sale_form(
-            customer, product, quantity, sale_price, available_stock, cart_tree, summary
-        ),
+        "<F3>": handle_new_sale,
         "<Escape>": handle_escape,
     })
 # ===========================
@@ -552,9 +597,7 @@ def sales_window():
 # ==========================
     Button(
         toolbar, text="New Sale", width=15,
-        command=lambda: clear_sale_form(
-            customer, product, quantity, sale_price, available_stock, cart_tree, summary
-        )
+        command=handle_new_sale
     ).pack(side=LEFT, padx=5, pady=5)
 
     Button(
@@ -564,7 +607,7 @@ def sales_window():
 
     Button(
         toolbar, text="Remove Item", width=15,
-        command=lambda: remove_cart_item(cart_tree, summary)
+        command=handle_remove_cart_item
     ).pack(side=LEFT, padx=5, pady=5)
 
     Button(
@@ -651,7 +694,8 @@ def sales_history():
         headers = [
             "ID", "Sale No", "Customer", "Date",
             "Gross Total", "Discount %", "Discount Amt",
-            "Tax %", "Tax Amt", "Net Total", "Qty Sold", "Returned Qty"
+            "Tax %", "Tax Amt", "Net Total", "Qty Sold", "Returned Qty",
+            "Payment Status", "Amount Paid", "Balance Due"
         ]
 
         export_to_excel(headers, rows, "Sales_History")
@@ -691,7 +735,8 @@ def sales_history():
                 row[0], row[1], row[2], row[3],
                 format_currency(row[4]), row[5], format_currency(row[6]),
                 row[7], format_currency(row[8]), format_currency(row[9]),
-                row[10], row[11]
+                row[10], row[11],
+                row[12], format_currency(row[13]), format_currency(row[14])
             )
             history_tree.insert("", END, values=formatted)
 
@@ -716,7 +761,8 @@ def sales_history():
         columns=(
             "id", "sale_no", "customer", "date",
             "gross_total", "discount", "discount_amount",
-            "tax", "tax_amount", "net_total", "quantity", "returned_qty"
+            "tax", "tax_amount", "net_total", "quantity", "returned_qty",
+            "payment_status", "amount_paid", "balance_due"
         ),
         yscrollcommand=scroll_y.set
     )
@@ -734,6 +780,9 @@ def sales_history():
     history_tree.heading("net_total", text="Net Total")
     history_tree.heading("quantity", text="Qty")
     history_tree.heading("returned_qty", text="Returned")
+    history_tree.heading("payment_status", text="Payment")
+    history_tree.heading("amount_paid", text="Amount Paid")
+    history_tree.heading("balance_due", text="Balance Due")
 
 
     history_tree.column("id", width=50, anchor=CENTER)
@@ -748,6 +797,9 @@ def sales_history():
     history_tree.column("net_total", width=100, anchor=E)
     history_tree.column("quantity", width=60, anchor=CENTER)
     history_tree.column("returned_qty", width=90, anchor=CENTER)
+    history_tree.column("payment_status", width=85, anchor=CENTER)
+    history_tree.column("amount_paid", width=100, anchor=E)
+    history_tree.column("balance_due", width=100, anchor=E)
 
 
     history_tree["show"] = "headings"
@@ -773,8 +825,11 @@ def show_sale_details(sale_id):
     (
         sale_no, customer_name, sale_date,
         gross_total, discount, discount_amount,
-        tax, tax_amount, net_total
+        tax, tax_amount, net_total,
+        payment_status, amount_paid
     ) = get_sale_header(sale_id)
+
+    balance_due = net_total - amount_paid
 
 # ========= Details Window =================================
     details_win = Toplevel()
@@ -790,6 +845,12 @@ def show_sale_details(sale_id):
         row=1, column=0, padx=10, pady=5, sticky="w")
     Label(header_frame, text=f"Sale Date : {sale_date}").grid(
         row=2, column=0, padx=10, pady=5, sticky="w")
+    Label(header_frame, text=f"Payment Status : {payment_status}").grid(
+        row=0, column=1, padx=10, pady=5, sticky="w")
+    Label(header_frame, text=f"Amount Paid : {format_currency(amount_paid)}").grid(
+        row=1, column=1, padx=10, pady=5, sticky="w")
+    Label(header_frame, text=f"Balance Due : {format_currency(balance_due)}").grid(
+        row=2, column=1, padx=10, pady=5, sticky="w")
 
     items_frame = Frame(details_win)
     items_frame.pack(fill="both", expand=True, padx=10, pady=10)

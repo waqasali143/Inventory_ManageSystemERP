@@ -85,6 +85,8 @@ def generate_sale_no():
     return f"SAL-{next_id:06d}"
 
 
+# =====================================================================
+
 def insert_sale_header(
         cursor,
         sale_no,
@@ -94,23 +96,44 @@ def insert_sale_header(
         discount_amount,
         tax,
         tax_amount,
-        net_total
+        net_total,
+        payment_status="Paid",
+        amount_paid=None
     ):
+
+    if amount_paid is None:
+        amount_paid = net_total  # Cash sale - fully paid by default
 
     cursor.execute("""
         INSERT INTO sales(
-            sale_no, customer_id, sale_date,
-            gross_total, discount, discount_amount,
-            tax, tax_amount, net_total
+            sale_no,
+            customer_id,
+            sale_date,
+            gross_total,
+            discount,
+            discount_amount,
+            tax,
+            tax_amount,
+            net_total,
+            payment_status,
+            amount_paid
         )
-        VALUES (?, ?, datetime('now'), ?, ?, ?, ?, ?, ?)
+        VALUES(?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        sale_no, customer_id,
-        gross_total, discount, discount_amount,
-        tax, tax_amount, net_total
+        sale_no,
+        customer_id,
+        gross_total,
+        discount,
+        discount_amount,
+        tax,
+        tax_amount,
+        net_total,
+        payment_status,
+        amount_paid
     ))
 
     return cursor.lastrowid
+
 # ====================================================================================
 def insert_sale_items(cursor, sale_id, items):
     """items: list of tuples -> (product_id, sale_price, cost_price, quantity, subtotal)"""
@@ -140,9 +163,16 @@ def fetch_sales_history(search_term=None, date_from=None, date_to=None):
 
     base_query = """
         SELECT
-            s.id, s.sale_no, c.name, s.sale_date,
-            s.gross_total, s.discount, s.discount_amount,
-            s.tax, s.tax_amount, s.net_total,
+            s.id,
+            s.sale_no,
+            c.name,
+            s.sale_date,
+            s.gross_total,
+            s.discount,
+            s.discount_amount,
+            s.tax,
+            s.tax_amount,
+            s.net_total,
             COALESCE((
                 SELECT SUM(si.quantity)
                 FROM sale_items si
@@ -152,11 +182,14 @@ def fetch_sales_history(search_term=None, date_from=None, date_to=None):
                 SELECT SUM(sr.quantity)
                 FROM sale_returns sr
                 WHERE sr.sale_id = s.id
-            ), 0) AS returned_qty
+            ), 0) AS returned_qty,
+            s.payment_status,
+            s.amount_paid,
+            (s.net_total - s.amount_paid) AS balance_due
         FROM sales s
-        INNER JOIN customers c ON s.customer_id = c.id
+        INNER JOIN customers c
+            ON s.customer_id = c.id
     """
-
     conditions = []
     params = []
 
@@ -179,6 +212,7 @@ def fetch_sales_history(search_term=None, date_from=None, date_to=None):
     conn.close()
 
     return rows
+
 # =================================================================
 
 def fetch_sale_header(sale_id):
@@ -188,11 +222,20 @@ def fetch_sale_header(sale_id):
 
     cursor.execute("""
         SELECT
-            s.sale_no, c.name, s.sale_date,
-            s.gross_total, s.discount, s.discount_amount,
-            s.tax, s.tax_amount, s.net_total
+            s.sale_no,
+            c.name,
+            s.sale_date,
+            s.gross_total,
+            s.discount,
+            s.discount_amount,
+            s.tax,
+            s.tax_amount,
+            s.net_total,
+            s.payment_status,
+            s.amount_paid
         FROM sales s
-        INNER JOIN customers c ON s.customer_id = c.id
+        INNER JOIN customers c
+            ON s.customer_id = c.id
         WHERE s.id = ?
     """, (sale_id,))
 
@@ -333,7 +376,8 @@ def fetch_sales_by_customer(customer_id):
     cursor.execute("""
         SELECT
             s.id, s.sale_no, s.sale_date,
-            s.gross_total, s.discount_amount, s.tax_amount, s.net_total
+            s.gross_total, s.discount_amount, s.tax_amount, s.net_total,
+            s.payment_status, (s.net_total - s.amount_paid) AS balance_due
         FROM sales s
         WHERE s.customer_id = ?
         ORDER BY s.id DESC

@@ -1,4 +1,3 @@
-
 from database.db_config import DB_PATH
 import sqlite3
 import bcrypt
@@ -145,7 +144,7 @@ def connect():
 
         all_sections = [
             "products", "customers", "suppliers", "sales", "purchase",
-            "expenses", "users", "business_settings", "reports"
+            "expenses", "users", "business_settings", "reports", "credit"
         ]
         for section in all_sections:
             cursor.execute(
@@ -335,6 +334,22 @@ def connect():
         cursor.execute(
             "ALTER TABLE purchases ADD COLUMN invoice_no TEXT DEFAULT ''"
         )
+
+    if "payment_status" not in existing_columns:
+        cursor.execute(
+            "ALTER TABLE purchases ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'Paid'"
+        )
+    if "amount_paid" not in existing_columns:
+        cursor.execute(
+            "ALTER TABLE purchases ADD COLUMN amount_paid REAL NOT NULL DEFAULT 0"
+        )
+        # Backfill: every purchase that existed before this column was
+        # added was cash-only at the time, so treat it as fully paid.
+        cursor.execute("""
+            UPDATE purchases
+            SET amount_paid = net_total
+            WHERE payment_status = 'Paid'
+        """)
 # =====================================
 # Purchase Items Table
 # =====================================
@@ -449,6 +464,22 @@ def connect():
         cursor.execute(
             "ALTER TABLE sales ADD COLUMN tax_amount REAL NOT NULL DEFAULT 0"
         )
+
+    if "payment_status" not in sales_existing_columns:
+        cursor.execute(
+            "ALTER TABLE sales ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'Paid'"
+        )
+    if "amount_paid" not in sales_existing_columns:
+        cursor.execute(
+            "ALTER TABLE sales ADD COLUMN amount_paid REAL NOT NULL DEFAULT 0"
+        )
+        # Backfill: every sale that existed before this column was added
+        # was cash-only at the time, so treat it as fully paid.
+        cursor.execute("""
+            UPDATE sales
+            SET amount_paid = net_total
+            WHERE payment_status = 'Paid'
+        """)
 # =============================================================
 # ------------  Sales Item Table  ---------------------------
 # ============================================================
@@ -505,6 +536,54 @@ def connect():
             expense_date TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+    """)
+# =============================================================
+# ------------  Customer Payments Table (Credit Ledger)  -------
+# (every payment a customer makes against their running credit
+#  balance - not tied to one specific sale, since small retail
+#  businesses usually collect against the total owed, not per
+#  invoice. Balance = SUM(credit sales owed) - SUM(these payments))
+# ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS customer_payments
+        (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            customer_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (customer_id)
+                REFERENCES customers(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_customer_payments_customer
+        ON customer_payments(customer_id)
+    """)
+# =============================================================
+# ------------  Supplier Payments Table (Credit Ledger)  -------
+# (mirror of customer_payments - what WE pay suppliers against
+#  what we owe them on credit purchases)
+# ============================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS supplier_payments
+        (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            supplier_id INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (supplier_id)
+                REFERENCES suppliers(id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_supplier_payments_supplier
+        ON supplier_payments(supplier_id)
     """)
 # ---------------------------------------------
 # ----------------

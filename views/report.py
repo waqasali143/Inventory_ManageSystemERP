@@ -7,6 +7,7 @@ from utils.export_helpers import export_multi_sheet_excel
 from services.report_service import (
     get_weekly_range, get_monthly_range, get_custom_range, get_report_data, get_product_wise_report
 )
+from services.credit_service import get_credit_report_data
 from services.settings_service import format_currency
 from utils.theme import (
     PRIMARY, PRIMARY_DARK, BACKGROUND, WHITE, TEXT,
@@ -16,7 +17,7 @@ from utils.theme import (
 )
 from utils.branding_helpers import add_branding_strip
 
-from services.invoice_service import generate_business_report_pdf
+from services.invoice_service import generate_business_report_pdf, generate_credit_report_pdf
 from utils.tree_helpers import build_treeview, reload_treeview
 from utils.window_helpers import size_and_center
 from utils.ui_helpers import add_buttons, labeled_entry, labeled_date_picker
@@ -71,12 +72,20 @@ def open_report_window():
         command=lambda: apply_custom_range()
     ).grid(row=0, column=6, padx=10)
 
+    def handle_print_business_report():
+        try:
+            generate_business_report_pdf(
+                latest_data["value"], current_range["from"], current_range["to"],
+                latest_data.get("product_details"), latest_data.get("unsold_products"),
+                latest_credit_data["value"]
+            )
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror("Print Report Failed", f"{type(e).__name__}: {e}")
+
     Button(
         filter_frame, text="🖨 Print Report", width=14,
-        command=lambda: generate_business_report_pdf(
-            latest_data["value"], current_range["from"], current_range["to"],
-            latest_data.get("product_details"), latest_data.get("unsold_products")
-        )
+        command=handle_print_business_report
     ).grid(row=0, column=7, padx=10)
 # ----------------------------------------------------------------
     Button(
@@ -95,12 +104,51 @@ def open_report_window():
             return
 
         sold_headers = ["Product", "Qty Sold", "Revenue", "Discount", "Cost", 
-                        "Profit", "Current Stock"]
+                        "Profit", "Current Stock", "Sold on Credit"]
         unsold_headers = ["Product", "Current Stock"]
+        credit_headers = ["Type", "Name", "Contact", "Balance", "Amount Paid",
+                          "Open Invoices", "Last Payment Amount", "Last Payment Date"]
+        summary_headers = ["Metric", "Amount"]
+
+        credit_data = latest_credit_data.get("value") or {"customers": [], "suppliers": []}
+
+        credit_rows = [
+            (
+                "Customer", name, contact, balance, amount_paid, open_invoices,
+                last_payment_amount if last_payment_amount is not None else "",
+                last_payment_date or ""
+            )
+            for _id, name, contact, balance, amount_paid, open_invoices,
+                last_payment_amount, last_payment_date in credit_data["customers"]
+        ] + [
+            (
+                "Supplier", name, contact, balance, amount_paid, open_invoices,
+                last_payment_amount if last_payment_amount is not None else "",
+                last_payment_date or ""
+            )
+            for _id, name, contact, balance, amount_paid, open_invoices,
+                last_payment_amount, last_payment_date in credit_data["suppliers"]
+        ]
+
+        report_data = latest_data["value"]
+        summary_rows = [
+            ("Total Sales", report_data["total_sales"]),
+            ("Total Purchases", report_data["total_purchases"]),
+            ("Cost of Sold Items", report_data["cost_of_sold_items"]),
+            ("Tax Collected (Sales)", report_data["sales_tax"]),
+            ("Tax Paid (Purchases)", report_data["purchase_tax"]),
+            ("Total Expenses", report_data["total_expenses"]),
+            ("Gross Profit", report_data["gross_profit"]),
+            ("Total Profit", report_data["total_profit"]),
+            ("Total Receivable", credit_data.get("total_receivable", 0)),
+            ("Total Payable", credit_data.get("total_payable", 0)),
+        ]
 
         export_multi_sheet_excel([
+            ("Summary", summary_headers, summary_rows),
             ("Sold Products", sold_headers, product_details),
             ("Not Sold", unsold_headers, latest_data.get("unsold_products", [])),
+            ("Credit", credit_headers, credit_rows),
         ], f"Business_Report_{current_range['from']}_to_{current_range['to']}")
         
     # ---------------- Tabs (Notebook) - NO scrolling needed, so no flicker ----------------
@@ -115,12 +163,14 @@ def open_report_window():
 
     details_tab = Frame(notebook, bg=BACKGROUND)
     unsold_tab = Frame(notebook, bg=BACKGROUND)
+    credit_tab = Frame(notebook, bg=BACKGROUND)
 
 
     notebook.add(overview_tab, text="  📋 Overview  ")
     notebook.add(charts_tab, text="  📈 Charts  ")
     notebook.add(details_tab, text="  📦 Product Details  ")
     notebook.add(unsold_tab, text="  🚫 Not Sold  ")
+    notebook.add(credit_tab, text="  💳 Credit  ")
 
     # ================================================================
     # TAB 1: OVERVIEW - Summary Cards + Best/Worst Product Tables
@@ -139,10 +189,23 @@ def open_report_window():
 
         return value_label
 
-    sales_value = summary_card(summary_frame, "Total Sales", BLUE)
-    purchase_value = summary_card(summary_frame, "Total Purchases", ORANGE)
+    sales_value = summary_card(summary_frame, "Total Sales (Incl. Tax)", BLUE)
+    purchase_value = summary_card(summary_frame, "Total Purchases (Incl. Tax)", ORANGE)
     expense_value = summary_card(summary_frame, "Total Expenses", "#8B5CF6")
-    profit_value = summary_card(summary_frame, "Total Profit", GREEN)
+    profit_value = summary_card(summary_frame, "Total Profit (Excl. Tax)", GREEN)
+    overview_receivable_value = summary_card(summary_frame, "Total Receivable", "#059669")
+    overview_payable_value = summary_card(summary_frame, "Total Payable", "#DC2626")
+
+    # Second row: Cost of Sold Items sits right under Total Purchases
+    # on purpose - so it's easy to see this is the cost of only the
+    # items actually sold, not everything bought from suppliers.
+    summary_frame_2 = Frame(overview_tab, bg=BACKGROUND)
+    summary_frame_2.pack(fill="x", padx=10, pady=(0, 15))
+
+    cogs_value = summary_card(summary_frame_2, "Cost of Sold Items (Excl. Tax)", "#0D9488")
+    sales_tax_value = summary_card(summary_frame_2, "Tax Collected (Sales)", "#2563EB")
+    purchase_tax_value = summary_card(summary_frame_2, "Tax Paid (Purchases)", "#D97706")
+
     tables_frame = Frame(overview_tab, bg=BACKGROUND)
     tables_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
@@ -237,14 +300,29 @@ def open_report_window():
     details_frame = Frame(details_tab, bg=BACKGROUND)
     details_frame.pack(fill="both", expand=True, padx=10, pady=15)
 
+    Label(
+        details_frame,
+        text="Revenue, Discount, Cost and Profit here are combined across Cash and "
+             "Credit sales for the period (a sale counts once it's made, not once "
+             "it's paid for), and are shown excluding tax - sales tax collected is "
+             "owed to the tax authority, not business income (see \"Tax Collected\" "
+             "on the Overview tab). \"Sold on Credit\" is a historical total for the "
+             "selected date range and does not decrease when a customer pays later "
+             "through the Credit Ledger, since ledger payments aren't tied to "
+             "specific products. See the Credit tab or Credit Ledger for live "
+             "outstanding balances.",
+        bg=BACKGROUND, fg="gray30", font=("Segoe UI", 8), wraplength=900, justify=LEFT
+    ).pack(anchor="w", pady=(0, 8))
+
     DETAIL_COLUMNS = [
-        {"key": "name", "heading": "Product", "width": 180, "stretch": True},
-        {"key": "qty", "heading": "Qty Sold", "width": 90, "anchor": CENTER, "stretch": False},
-        {"key": "revenue", "heading": "Revenue", "width": 110, "anchor": E, "stretch": False},
-        {"key": "discount", "heading": "Discount", "width": 100, "anchor": E, "stretch": False},
-        {"key": "cost", "heading": "Cost", "width": 110, "anchor": E, "stretch": False},
-        {"key": "profit", "heading": "Profit", "width": 110, "anchor": E, "stretch": False},
-        {"key": "stock", "heading": "Current Stock (On Hand)", "width": 140, "anchor": CENTER, "stretch": False},
+        {"key": "name", "heading": "Product", "width": 150, "stretch": True},
+        {"key": "qty", "heading": "Qty Sold", "width": 75, "anchor": CENTER, "stretch": False},
+        {"key": "revenue", "heading": "Revenue (Excl. Tax)", "width": 130, "anchor": E, "stretch": False},
+        {"key": "discount", "heading": "Discount", "width": 90, "anchor": E, "stretch": False},
+        {"key": "cost", "heading": "Cost", "width": 100, "anchor": E, "stretch": False},
+        {"key": "profit", "heading": "Profit (Excl. Tax)", "width": 120, "anchor": E, "stretch": False},
+        {"key": "stock", "heading": "Current Stock (On Hand)", "width": 130, "anchor": CENTER, "stretch": False},
+        {"key": "credit", "heading": "Sold on Credit", "width": 110, "anchor": E, "stretch": False},
     ]
 
     details_scroll = Scrollbar(details_frame, orient=VERTICAL, command=lambda *args: details_tree.yview(*args))
@@ -274,6 +352,118 @@ def open_report_window():
     unsold_tree.configure(yscrollcommand=unsold_scroll.set)
     unsold_scroll.pack(side=RIGHT, fill=Y)
     unsold_tree.pack(side=TOP, fill="both", expand=True)
+
+    # ================================================================
+    # TAB 5: CREDIT - Receivables (customers) & Payables (suppliers)
+    # A point-in-time snapshot, not tied to the Weekly/Monthly/Custom
+    # date filter above - it always reflects the current outstanding
+    # balances, same as the Credit Ledger screen.
+    # ================================================================
+    credit_summary_frame = Frame(credit_tab, bg=BACKGROUND)
+    credit_summary_frame.pack(fill="x", padx=10, pady=15)
+
+    receivable_value = summary_card(credit_summary_frame, "Total Receivable", GREEN)
+    payable_value = summary_card(credit_summary_frame, "Total Payable", RED)
+
+    Button(
+        credit_summary_frame, text="🔄 Refresh", width=12,
+        command=lambda: load_credit_report()
+    ).pack(side=LEFT, padx=20)
+
+    def handle_print_credit_report():
+        if not latest_credit_data["value"]:
+            return
+        try:
+            generate_credit_report_pdf(latest_credit_data["value"])
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror("Print Credit Report Failed", f"{type(e).__name__}: {e}")
+
+    Button(
+        credit_summary_frame, text="🖨 Print Credit Report", width=20,
+        command=handle_print_credit_report
+    ).pack(side=LEFT, padx=5)
+
+    credit_tables_frame = Frame(credit_tab, bg=BACKGROUND)
+    credit_tables_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+    CREDIT_COLUMNS = [
+        {"key": "name", "heading": "Name", "width": 140, "stretch": True},
+        {"key": "contact", "heading": "Contact", "width": 110, "stretch": False},
+        {"key": "balance", "heading": "Balance", "width": 110, "anchor": E, "stretch": False},
+        {"key": "amount_paid", "heading": "Amount Paid", "width": 110, "anchor": E, "stretch": False},
+        {"key": "open_invoices", "heading": "Open Inv.", "width": 80, "anchor": CENTER, "stretch": False},
+        {"key": "last_payment_amount", "heading": "Last Pay. Amt", "width": 110, "anchor": E, "stretch": False},
+        {"key": "last_payment_date", "heading": "Last Pay. Date", "width": 110, "anchor": CENTER, "stretch": False},
+    ]
+
+    def _lock_column_widths(tree, columns):
+        """Sets minwidth = width for every column so Tkinter can never
+        auto-shrink a column smaller than what its heading/content needs
+        - without this, ttk.Treeview silently compresses columns to fit
+        the available frame width, which is what was clipping headings."""
+        for col in columns:
+            tree.column(col["key"], minwidth=col["width"], width=col["width"], stretch=col.get("stretch", False))
+
+    receivable_frame = LabelFrame(
+        credit_tables_frame, text="Customers - Amount Owed To Us", bg=BACKGROUND,
+        font=FONT_BODY_BOLD, padx=10, pady=10
+    )
+    receivable_frame.pack(side=LEFT, fill="both", expand=True, padx=(0, 10))
+    receivable_tree = build_treeview(receivable_frame, CREDIT_COLUMNS, height=10)
+    _lock_column_widths(receivable_tree, CREDIT_COLUMNS)
+    receivable_scroll_x = Scrollbar(receivable_frame, orient=HORIZONTAL, command=receivable_tree.xview)
+    receivable_tree.configure(xscrollcommand=receivable_scroll_x.set)
+    receivable_scroll_x.pack(side=BOTTOM, fill=X)
+    receivable_tree.pack(fill="both", expand=True)
+
+    payable_frame = LabelFrame(
+        credit_tables_frame, text="Suppliers - Amount We Owe", bg=BACKGROUND,
+        font=FONT_BODY_BOLD, padx=10, pady=10
+    )
+    payable_frame.pack(side=LEFT, fill="both", expand=True)
+    payable_tree = build_treeview(payable_frame, CREDIT_COLUMNS, height=10)
+    _lock_column_widths(payable_tree, CREDIT_COLUMNS)
+    payable_scroll_x = Scrollbar(payable_frame, orient=HORIZONTAL, command=payable_tree.xview)
+    payable_tree.configure(xscrollcommand=payable_scroll_x.set)
+    payable_scroll_x.pack(side=BOTTOM, fill=X)
+    payable_tree.pack(fill="both", expand=True)
+
+    latest_credit_data = {"value": None}
+
+    def load_credit_report():
+        data = get_credit_report_data()
+        latest_credit_data["value"] = data
+
+        receivable_value.config(text=format_currency(data["total_receivable"]))
+        payable_value.config(text=format_currency(data["total_payable"]))
+        overview_receivable_value.config(text=format_currency(data["total_receivable"]))
+        overview_payable_value.config(text=format_currency(data["total_payable"]))
+
+        customer_rows = [
+            (
+                name, contact, format_currency(balance), format_currency(amount_paid),
+                open_invoices,
+                format_currency(last_payment_amount) if last_payment_amount is not None else "—",
+                last_payment_date or "—"
+            )
+            for _id, name, contact, balance, amount_paid, open_invoices,
+                last_payment_amount, last_payment_date in data["customers"]
+        ]
+        supplier_rows = [
+            (
+                name, contact, format_currency(balance), format_currency(amount_paid),
+                open_invoices,
+                format_currency(last_payment_amount) if last_payment_amount is not None else "—",
+                last_payment_date or "—"
+            )
+            for _id, name, contact, balance, amount_paid, open_invoices,
+                last_payment_amount, last_payment_date in data["suppliers"]
+        ]
+
+        reload_treeview(receivable_tree, customer_rows)
+        reload_treeview(payable_tree, supplier_rows)
+
     # ---------------- Load Report Data ----------------
     def load_report(start_date, end_date):
 
@@ -286,6 +476,9 @@ def open_report_window():
         purchase_value.config(text=format_currency(data["total_purchases"]))
         expense_value.config(text=format_currency(data["total_expenses"]))
         profit_value.config(text=format_currency(data["total_profit"]))
+        cogs_value.config(text=format_currency(data["cost_of_sold_items"]))
+        sales_tax_value.config(text=format_currency(data["sales_tax"]))
+        purchase_tax_value.config(text=format_currency(data["purchase_tax"]))
         best_rows = [(name, qty, format_currency(revenue)) for name, qty, revenue in data["best_products"]]
         worst_rows = [(name, qty, format_currency(revenue)) for name, qty, revenue in data["worst_products"]]
 
@@ -295,8 +488,8 @@ def open_report_window():
         product_details = get_product_wise_report(start_date, end_date)
         detail_rows = [
             (name, qty, format_currency(revenue), format_currency(discount),
-             format_currency(cost), format_currency(profit), stock)
-            for name, qty, revenue, discount, cost, profit, stock in product_details
+             format_currency(cost), format_currency(profit), stock, format_currency(credit))
+            for name, qty, revenue, discount, cost, profit, stock, credit in product_details
         ]
         reload_treeview(details_tree, detail_rows)
 
@@ -332,5 +525,6 @@ def open_report_window():
 
     # ---------------- Default: load Weekly on open ----------------
     load_report(*get_weekly_range())
+    load_credit_report()
 
     win.deiconify()

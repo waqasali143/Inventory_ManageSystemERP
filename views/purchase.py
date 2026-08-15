@@ -409,13 +409,16 @@ def purchase_window():
     # ------------------------------------
     #====  Handle ==========
     def handle_save_purchase():
-        save_purchase(supplier, invoice_no, purchase_date_picker, cart_tree, summary)
+        save_purchase(supplier, invoice_no, purchase_date_picker, cart_tree, summary,
+                      payment_type, amount_paid)
         product.set("")
         purchase_price.set("")
         quantity.set("")
         line_total.set("0.00")
         current_stock.set("0")
         stock_after_purchase.set("0")
+        payment_type.set("Cash")
+        on_payment_type_change()
 # ========================================================
 #   New Purchase Handler (F3)
 #   Same reset as a successful save, minus the actual saving -
@@ -430,6 +433,8 @@ def purchase_window():
         line_total.set("0.00")
         current_stock.set("0")
         stock_after_purchase.set("0")
+        payment_type.set("Cash")
+        on_payment_type_change()
 
 # ===========================
 #   Escape Handler
@@ -498,6 +503,43 @@ def purchase_window():
         width=20, state="readonly", justify="right",
         font=("Arial", 10, "bold")
         ).grid(row=5, column=1, padx=10)
+
+# ---------------------------------------------
+#   Payment Type (Cash / Credit)
+# ---------------------------------------------
+    payment_type = StringVar(value="Cash")
+    amount_paid = StringVar(value="0")
+
+    Label(summary_frame, text="Payment", font=("Arial", 9, "bold")
+        ).grid(row=6, column=0, sticky="w", pady=(12, 2))
+
+    payment_frame = Frame(summary_frame)
+    payment_frame.grid(row=6, column=1, sticky="w", pady=(12, 2))
+
+    amount_paid_entry = Entry(summary_frame, textvariable=amount_paid, width=20)
+
+    def on_payment_type_change():
+        if payment_type.get() == "Credit":
+            amount_paid_entry.config(state="normal")
+            amount_paid.set("0")
+        else:
+            amount_paid.set(str(net_display.get()))
+            amount_paid_entry.config(state="disabled")
+
+    Radiobutton(
+        payment_frame, text="Cash", variable=payment_type, value="Cash",
+        command=on_payment_type_change
+    ).pack(side=LEFT)
+
+    Radiobutton(
+        payment_frame, text="Credit", variable=payment_type, value="Credit",
+        command=on_payment_type_change
+    ).pack(side=LEFT, padx=(10, 0))
+
+    Label(summary_frame, text="Amount Paid Now"
+        ).grid(row=7, column=0, sticky="w", pady=5)
+    amount_paid_entry.grid(row=7, column=1, padx=10)
+    amount_paid_entry.config(state="disabled")  # Cash is selected by default
 
     refresh_totals()  # show correctly formatted currency as soon as the window opens
     
@@ -837,7 +879,8 @@ def purchase_history():
         headers = [
             "ID", "Purchase No", "Supplier", "Gross Total",
             "Discount %", "Discount Amt", "Tax %", "Tax Amt",
-            "Net Total", "Date", "Qty", "Returned Qty"
+            "Net Total", "Date", "Qty", "Returned Qty",
+            "Payment Status", "Amount Paid", "Balance Due"
         ]
 
         export_to_excel(headers, rows, "Purchase_History")
@@ -886,6 +929,12 @@ def purchase_history():
         "anchor": CENTER},
     { "key": "returned_qty", "heading": "Returned", "width": 70,"min_width": 60,
         "anchor": CENTER},
+    {"key": "payment_status", "heading": "Payment", "width": 85, "min_width": 75,
+        "anchor": CENTER},
+    {"key": "amount_paid", "heading": "Amount Paid", "width": 100, "min_width": 90,
+        "anchor": E},
+    {"key": "balance_due", "heading": "Balance Due", "width": 100, "min_width": 90,
+        "anchor": E},
     ]
     
     history_tree = build_treeview(table_frame, HISTORY_COLUMNS)
@@ -946,7 +995,8 @@ def show_purchase_details(event):
     (
     purchase_no, invoice_no_value, supplier_name, purchase_date_picker,
     gross_total, discount, discount_amount,
-    tax, tax_amount, net_total
+    tax, tax_amount, net_total,
+    payment_status, amount_paid
     ) = get_purchase_header(purchase_id)
 
     details_win = Toplevel()
@@ -1010,6 +1060,23 @@ def show_purchase_details(event):
     Label(
         totals_frame, text=f"Net Total : {format_currency(net_total)}", font=("Arial", 11, "bold")
     ).grid(row=0, column=3, padx=20, pady=5, sticky="w")
+
+    balance_due = net_total - amount_paid
+
+    Label(
+        totals_frame, text=f"Payment : {payment_status}",
+        font=("Arial", 10, "bold"),
+        fg=("#B91C1C" if payment_status != "Paid" else "#166534")
+    ).grid(row=1, column=0, padx=20, pady=5, sticky="w")
+
+    Label(
+        totals_frame, text=f"Amount Paid : {format_currency(amount_paid)}"
+    ).grid(row=1, column=1, padx=20, pady=5, sticky="w")
+
+    Label(
+        totals_frame, text=f"Balance Due : {format_currency(balance_due)}",
+        font=("Arial", 10, "bold")
+    ).grid(row=1, column=2, padx=20, pady=5, sticky="w")
 
     totals_frame.pack(fill="x", padx=10, pady=(0, 10))
 # ===============================================================

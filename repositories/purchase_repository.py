@@ -139,8 +139,13 @@ def insert_purchase_header(
         discount_amount,
         tax,
         tax_amount,
-        net_total
+        net_total,
+        payment_status="Paid",
+        amount_paid=None
     ):
+
+    if amount_paid is None:
+        amount_paid = net_total  # Cash purchase - fully paid by default
 
     cursor.execute("""
         INSERT INTO purchases(
@@ -153,9 +158,11 @@ def insert_purchase_header(
             discount_amount,
             tax,
             tax_amount,
-            net_total
+            net_total,
+            payment_status,
+            amount_paid
         )
-        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         purchase_no,
         invoice_no,
@@ -166,7 +173,9 @@ def insert_purchase_header(
         discount_amount,
         tax,
         tax_amount,
-        net_total
+        net_total,
+        payment_status,
+        amount_paid
     ))
 
     return cursor.lastrowid
@@ -257,7 +266,10 @@ def fetch_purchase_history(search_term=None, date_from=None, date_to=None):
                     SELECT SUM(pr.quantity)
                     FROM purchase_returns pr
                     WHERE pr.purchase_id = p.id
-            ), 0) AS returned_qty
+            ), 0) AS returned_qty,
+            p.payment_status,
+            p.amount_paid,
+            (p.net_total - p.amount_paid) AS balance_due
         FROM purchases p
         INNER JOIN suppliers s
             ON p.supplier_id = s.id
@@ -304,7 +316,9 @@ def fetch_purchase_header(purchase_id):
             p.discount_amount,
             p.tax,
             p.tax_amount,
-            p.net_total
+            p.net_total,
+            p.payment_status,
+            p.amount_paid
         FROM purchases p
         INNER JOIN suppliers s
             ON p.supplier_id = s.id
@@ -479,7 +493,8 @@ def fetch_purchases_by_supplier(supplier_id):
     cursor.execute("""
         SELECT
             p.id, p.purchase_no, p.purchase_date,
-            p.gross_total, p.discount_amount, p.tax_amount, p.net_total
+            p.gross_total, p.discount_amount, p.tax_amount, p.net_total,
+            p.payment_status, (p.net_total - p.amount_paid) AS balance_due
         FROM purchases p
         WHERE p.supplier_id = ?
         ORDER BY p.id DESC

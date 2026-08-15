@@ -21,6 +21,7 @@ from views import product, supplier, customer, expense, user, business_settings
 
 from views.report import open_report_window
 from views.about import open_about_window
+from views.credit_ledger import open_window as open_credit_ledger
 import sqlite3
 
 from utils import event_bus
@@ -311,7 +312,7 @@ class Dashboard:
         Label(
             self.sidebar, text="MENU", bg=SIDEBAR, fg=WHITE,
             font=("Segoe UI", 14, "bold")
-        ).pack(pady=12)
+        ).pack(pady=10)
 
         # ---------------- Fixed Footer: About + Logout (never scrolls away) ----------------
         footer = Frame(self.sidebar, bg=SIDEBAR)
@@ -845,7 +846,7 @@ class Dashboard:
             anchor="w",
             padx=20
         )
-        btn.pack(fill=X, ipady=8)
+        btn.pack(fill=X, ipady=6)
 
         if not hasattr(self, "sidebar_buttons"):
             self.sidebar_buttons = {}
@@ -934,6 +935,9 @@ class Dashboard:
         if has_permission("reports"):
             self.sidebar_button("📊 Reports", command=open_report_window, key="reports")
             self.create_reports_menu()
+
+        if has_permission("credit"):
+            self.sidebar_button("💳 Credit Ledger", open_credit_ledger, key="credit")
                     
 # ===========================================================
 # DASHBOARD LAUNCHER

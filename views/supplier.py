@@ -13,11 +13,11 @@ from utils.theme import (
     apply_app_style
 )
 from utils.branding_helpers import add_branding_strip
+from utils.shortcut_helper import bind_shortcuts
 
 from services.invoice_service import generate_supplier_statement
 from utils.tree_helpers import build_treeview
 from utils.window_helpers import size_and_center
-from utils.shortcut_helper import bind_shortcuts
 
 SUPPLIER_COLUMNS = ("id", "name", "contact", "email", "address", "status")
 
@@ -236,14 +236,11 @@ def open_window():
         lambda event: select_supplier(event, tree, name, contact, email, address, selected_id, ntn, is_filer)
     )
 
-    refresh_suppliers(tree)
-    name_entry.focus_set()
-
-# ==========================================================
+# ===========================
 #   Keyboard Shortcuts
 #   F2 = Save (new record) or Update (if a row is selected),
 #   Escape = Close window
-# ==========================================================
+# ===========================
     def handle_f2():
         if selected_id.get():
             handle_update(selected_id, name, contact, email, address, tree, ntn, is_filer)
@@ -258,6 +255,7 @@ def open_window():
     refresh_suppliers(tree)
     name_entry.focus_set()
 
+
 # =====================================
 # Supplier Purchase History Window
 # =====================================
@@ -267,8 +265,11 @@ PURCHASE_HISTORY_COLUMNS = [
     {"key": "date", "heading": "Date", "width": 170, "stretch": False},
     {"key": "gross_total", "heading": "Gross Total", "width": 110, "anchor": E, "stretch": False},
     {"key": "discount_amount", "heading": "Discount Amt", "width": 120, "anchor": E, "stretch": False},
-    {"key": "tax_amount", "heading": "Tax Amt", "width": 110, "anchor": E, "stretch": True},
+    {"key": "tax_amount", "heading": "Tax Amt", "width": 110, "anchor": E, "stretch": False},
     {"key": "net_total", "heading": "Net Total", "width": 130, "anchor": E, "stretch": False},
+    {"key": "payment_status", "heading": "Payment", "width": 90, "anchor": CENTER, "stretch": False},
+    {"key": "amount_paid", "heading": "Amount Paid", "width": 110, "anchor": E, "stretch": False},
+    {"key": "balance_due", "heading": "Balance Due", "width": 110, "anchor": E, "stretch": True},
 ]
 
 
@@ -310,7 +311,8 @@ def open_supplier_purchase_history(selected_id, name, ntn, is_filer):
     tree.configure(yscrollcommand=scroll_y.set)
     scroll_y.config(command=tree.yview)
     tree["displaycolumns"] = (
-        "purchase_no", "date", "gross_total", "discount_amount", "tax_amount", "net_total"
+        "purchase_no", "date", "gross_total", "discount_amount", "tax_amount",
+        "net_total", "payment_status", "amount_paid", "balance_due"
     )
     tree.pack(fill=BOTH, expand=True)
 
@@ -318,13 +320,18 @@ def open_supplier_purchase_history(selected_id, name, ntn, is_filer):
 
     total_spent = 0.0
     for row in rows:
+        net_total = row[6]
+        payment_status, balance_due = row[7], row[8]
+        amount_paid = net_total - balance_due
+
         formatted_row = (
             row[0], row[1], row[2],
             format_currency(row[3]), format_currency(row[4]),
-            format_currency(row[5]), format_currency(row[6])
+            format_currency(row[5]), format_currency(net_total),
+            payment_status, format_currency(amount_paid), format_currency(balance_due)
         )
         tree.insert("", "end", values=formatted_row)
-        total_spent += row[6]
+        total_spent += net_total
 
     if not rows:
         Label(

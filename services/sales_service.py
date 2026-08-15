@@ -151,7 +151,7 @@ def _extract_cart_items(cart_tree):
 # Re-checks live stock right before committing, since time may have
 # passed since the item was added to the cart.
 # =====================================
-def save_sale(customer, cart_tree, summary):
+def save_sale(customer, cart_tree, summary, payment_type=None, amount_paid_str=None):
 
     if customer.get().strip() == "":
         messagebox.showerror("Error", "Please select a customer.")
@@ -175,6 +175,32 @@ def save_sale(customer, cart_tree, summary):
             )
             return False
 
+    gross, discount, discount_amount, tax, tax_amount, net_total = summary.as_floats()
+
+    # payment_type/amount_paid_str are optional so save_sale still works
+    # from any caller that hasn't been updated for Credit yet - defaults
+    # to a fully-paid Cash sale, same behaviour as before this feature.
+    is_credit = payment_type is not None and payment_type.get() == "Credit"
+
+    if is_credit:
+        try:
+            amount_paid = float(amount_paid_str.get()) if amount_paid_str else 0.0
+        except ValueError:
+            messagebox.showerror("Error", "Amount Paid must be a number.")
+            return False
+
+        if amount_paid < 0 or amount_paid > net_total:
+            messagebox.showerror(
+                "Error", "Amount Paid must be between 0 and the Net Total."
+            )
+            return False
+
+        payment_status = "Paid" if amount_paid >= net_total else \
+                          ("Partial" if amount_paid > 0 else "Credit")
+    else:
+        amount_paid = net_total
+        payment_status = "Paid"
+
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -182,11 +208,10 @@ def save_sale(customer, cart_tree, summary):
         sale_no = repo.generate_sale_no()
         customer_id = repo.fetch_customer_id(customer.get().strip())
 
-        gross, discount, discount_amount, tax, tax_amount, net_total = summary.as_floats()
-
         sale_id = repo.insert_sale_header(
             cursor, sale_no, customer_id,
-            gross, discount, discount_amount, tax, tax_amount, net_total
+            gross, discount, discount_amount, tax, tax_amount, net_total,
+            payment_status, amount_paid
         )
 
         repo.insert_sale_items(cursor, sale_id, cart_items)
@@ -197,6 +222,9 @@ def save_sale(customer, cart_tree, summary):
         conn.commit()
 
         event_bus.publish()
+
+        if amount_paid_str is not None:
+            amount_paid_str.set("0")
 
         messagebox.showinfo("Success", f"Sale {sale_no} saved successfully.")
         return sale_id

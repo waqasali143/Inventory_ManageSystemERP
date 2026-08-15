@@ -1,5 +1,6 @@
 from tkinter import messagebox
 from repositories import customer_repository as repo
+from services import credit_service
 from utils import event_bus
 
 # =====================================
@@ -134,3 +135,10 @@ def get_customer_filer_status(customer_id):
 # ===========================================================
 def get_customer_ntn(customer_id):
     return repo.fetch_customer_ntn(customer_id)
+
+# =====================================
+# Credit Balance (thin wrapper so customer.py only ever imports
+# from "services", never directly from "credit_service"/repositories)
+# =====================================
+def get_customer_balance(customer_id):
+    return credit_service.get_customer_balance(customer_id)

@@ -47,6 +47,15 @@ def get_report_data(start_date, end_date):
     gross_profit = sum(row[5] for row in product_details)   # row[5] = profit
     total_profit = gross_profit - total_expenses
 
+    # Cost of Goods Sold (COGS) - the actual cost of only the items
+    # that were sold in this period, as opposed to total_purchases
+    # (everything bought from suppliers, sold or still sitting in
+    # stock). Reuses product_details we already fetched above, so
+    # no extra query is needed - row[4] is each product's total cost.
+    cost_of_sold_items = sum(row[4] for row in product_details)   # row[4] = cost
+
+    sales_tax, purchase_tax = repo.fetch_tax_totals(start_date, end_date)
+
     best_products = repo.fetch_top_products(start_date, end_date, limit=10, worst=False)
     worst_products = repo.fetch_top_products(start_date, end_date, limit=10, worst=True)
 
@@ -58,6 +67,9 @@ def get_report_data(start_date, end_date):
     return {
         "total_sales": total_sales,
         "total_purchases": total_purchases,
+        "cost_of_sold_items": cost_of_sold_items,
+        "sales_tax": sales_tax,
+        "purchase_tax": purchase_tax,
         "total_expenses": total_expenses,
         "gross_profit": gross_profit,
         "total_profit": total_profit,
@@ -80,7 +92,7 @@ def get_product_wise_report(start_date, end_date):
 
     products = {}
 
-    for name, qty, sale_price, cost_price, subtotal, sale_gross, sale_discount in raw_rows:
+    for name, qty, sale_price, cost_price, subtotal, sale_gross, sale_discount, sale_net, sale_amount_paid in raw_rows:
 
         # This item's proportional share of its invoice's discount:
         # (this item's subtotal / invoice's gross total) * invoice discount
@@ -88,6 +100,15 @@ def get_product_wise_report(start_date, end_date):
             allocated_discount = (subtotal / sale_gross) * sale_discount
         else:
             allocated_discount = 0.0
+
+        # Same proportional-allocation approach for how much of this
+        # item's share is still unpaid. balance_due is 0 for fully
+        # paid sales, so this naturally comes out to 0 for them.
+        sale_balance_due = sale_net - sale_amount_paid
+        if sale_gross > 0:
+            allocated_credit = (subtotal / sale_gross) * sale_balance_due
+        else:
+            allocated_credit = 0.0
 
         cost = cost_price * qty
         profit = subtotal - allocated_discount - cost
@@ -99,6 +120,7 @@ def get_product_wise_report(start_date, end_date):
                 "discount": 0.0,
                 "cost": 0.0,
                 "profit": 0.0,
+                "credit": 0.0,
             }
 
         products[name]["qty"] += qty
@@ -106,6 +128,7 @@ def get_product_wise_report(start_date, end_date):
         products[name]["discount"] += allocated_discount
         products[name]["cost"] += cost
         products[name]["profit"] += profit
+        products[name]["credit"] += allocated_credit
 
     # Convert to a sorted list (highest profit first)
     
@@ -120,6 +143,7 @@ def get_product_wise_report(start_date, end_date):
             data["cost"],
             data["profit"],
             stock_map.get(name, 0),
+            data["credit"],
         )
         for name, data in products.items()
     ]
