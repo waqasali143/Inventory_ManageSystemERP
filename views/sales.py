@@ -32,6 +32,7 @@ def sales_window():
     add_branding_strip(win)
 
     win.title("Sales Management")
+    win.iconbitmap("assets/ims.ico")
 
     size_and_center(win, width_ratio=0.9, height_ratio=0.88, resizable=True)
 
@@ -636,6 +637,7 @@ def sales_history():
 
     history_win = Toplevel()
     history_win.title("Sales History")
+    history_win.iconbitmap("assets/ims.ico")
     size_and_center(history_win, width_ratio=0.9, height_ratio=0.75, resizable=True)
     search_frame = LabelFrame(history_win, text="Search Sale", padx=10, pady=10)
     search_frame.pack(fill="x", padx=10, pady=10)
@@ -834,6 +836,7 @@ def show_sale_details(sale_id):
 # ========= Details Window =================================
     details_win = Toplevel()
     details_win.title("Sale Details")
+    details_win.iconbitmap("assets/ims.ico")
     size_and_center(details_win, width_ratio=0.7, height_ratio=1, resizable=True)
 
     header_frame = LabelFrame(details_win, text="Sale Information", padx=10, pady=10)
@@ -908,6 +911,7 @@ def open_return_window():
 
     return_win = Toplevel()
     return_win.title("Process Sale Return")
+    return_win.iconbitmap("assets/ims.ico")
     size_and_center(return_win, width_ratio=0.6, height_ratio=0.6)
 
     current_sale_id = StringVar()
@@ -1020,6 +1024,7 @@ def open_sale_return_history_window():
 
     win = Toplevel()
     win.title("Sales Return History")
+    win.iconbitmap("assets/ims.ico")
     size_and_center(win, width_ratio=0.75, height_ratio=0.65)
 
     filter_frame = Frame(win)

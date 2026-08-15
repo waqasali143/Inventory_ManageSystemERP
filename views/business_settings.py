@@ -11,6 +11,12 @@ from utils.ui_helpers import labeled_entry
 from utils.window_helpers import size_and_center
 from utils.branding_helpers import add_branding_strip
 
+try:
+    from PIL import Image as PILImage, ImageTk
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
 # ======================================================================
 
 def open_window():
@@ -55,6 +61,30 @@ def open_window():
     labeled_entry(form_frame, "Phone", 2, 0, phone, justify="left")
     labeled_entry(form_frame, "NTN (optional)", 3, 0, ntn, justify="left")
 
+    # ---- Logo (licensed, read-only) ----
+    # Not editable from inside the app - set once per client in
+    # database/licensed_business.py, same as the Business Name above.
+    Label(form_frame, text="Logo (Licensed)", bg=BACKGROUND).grid(
+        row=4, column=0, padx=10, pady=8, sticky="w"
+    )
+    logo_path = current.get("logo_path")
+    if PIL_AVAILABLE and logo_path:
+        try:
+            logo = PILImage.open(logo_path)
+            logo.thumbnail((48, 48))
+            logo_preview_image = ImageTk.PhotoImage(logo)
+            logo_preview = Label(form_frame, image=logo_preview_image, bg=BACKGROUND)
+            logo_preview.image = logo_preview_image  # keep a reference, or Tkinter drops it
+            logo_preview.grid(row=4, column=1, padx=10, pady=8, sticky="w")
+        except Exception:
+            Label(form_frame, text="(logo file could not be loaded)", bg=BACKGROUND, fg="gray").grid(
+                row=4, column=1, padx=10, pady=8, sticky="w"
+            )
+    else:
+        Label(form_frame, text="(no logo set)", bg=BACKGROUND, fg="gray").grid(
+            row=4, column=1, padx=10, pady=8, sticky="w"
+        )
+
     def handle_save():
         save_business_info(address.get().strip(), phone.get().strip(), ntn.get().strip())
         messagebox.showinfo("Success", "Business Settings Saved")
@@ -62,7 +92,7 @@ def open_window():
     Button(
         form_frame, text="💾 Save Settings", bg=PRIMARY, fg=WHITE,
         relief=FLAT, cursor="hand2", command=handle_save
-    ).grid(row=4, column=0, columnspan=2, pady=15, sticky="ew", padx=10, ipady=6)
+    ).grid(row=5, column=0, columnspan=2, pady=15, sticky="ew", padx=10, ipady=6)
     # ===================================================================================
     # ---------------- Tax Rates ----------------
     tax_frame = LabelFrame(

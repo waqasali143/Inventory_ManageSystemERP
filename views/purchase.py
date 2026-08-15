@@ -279,6 +279,7 @@ def purchase_window():
     add_branding_strip(win)
     
     win.title("Purchase Management")
+    win.iconbitmap("assets/ims.ico")
     win.state("zoomed")   # window
 
     # Center Window
@@ -816,6 +817,7 @@ def purchase_history():
 
     history_win = Toplevel()
     history_win.title("Purchase History")
+    history_win.iconbitmap("assets/ims.ico")
     screen_width = history_win.winfo_screenwidth()
     screen_height = history_win.winfo_screenheight()
 
@@ -1001,6 +1003,7 @@ def show_purchase_details(event):
 
     details_win = Toplevel()
     details_win.title("Purchase Details")
+    details_win.iconbitmap("assets/ims.ico")
     size_and_center(details_win, width_ratio=0.7, height_ratio=1, resizable=True)
 
 
@@ -1093,6 +1096,7 @@ def open_purchase_return_window():
 
     return_win = Toplevel()
     return_win.title("Process Purchase Return")
+    return_win.iconbitmap("assets/ims.ico")
     size_and_center(return_win, width_ratio=0.6, height_ratio=0.6)
 
     current_purchase_id = StringVar()
@@ -1210,6 +1214,7 @@ def open_return_history_window():
 
     win = Toplevel()
     win.title("Purchase Return History")
+    win.iconbitmap("assets/ims.ico")
     size_and_center(win, width_ratio=0.75, height_ratio=0.65)
 
     filter_frame = Frame(win)

@@ -1,4 +1,3 @@
-
 from tkinter import *
 from tkinter import messagebox, filedialog
 from utils.export_helpers import export_to_excel
@@ -6,6 +5,7 @@ from services.product_service import (
     load_products, save_product, update_product, delete_product, 
     create_import_template, import_products_from_excel
 )
+from services.invoice_service import generate_product_list_pdf
 from utils.branding_helpers import add_branding_strip
 
 from utils.theme import (
@@ -129,9 +129,10 @@ def open_window():
     add_branding_strip(win)
 
     win.title("Inventory Management System | Product Management")
+    win.iconbitmap("assets/ims.ico")
     win.configure(bg=BACKGROUND)
 
-    size_and_center(win, width_ratio=0.85, height_ratio=0.9, resizable=True)
+    size_and_center(win, width_ratio=0.93, height_ratio=0.9, resizable=True)
 
     apply_app_style()
 
@@ -199,6 +200,13 @@ def open_window():
             search_frame, text="🗂 Export to Excel", width=18,
             command=lambda: export_products()
         ).grid(row=0, column=6, padx=10)
+
+    Button(
+            search_frame, text="🖨 Print Product List", width=18,
+            command=lambda: generate_product_list_pdf(
+                load_products(search.get().strip()), search.get().strip() or None
+            )
+        ).grid(row=0, column=7, padx=10)
 
     # ---------------- Product Form ----------------
     product_frame = LabelFrame(

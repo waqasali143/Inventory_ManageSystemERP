@@ -5,7 +5,7 @@ from services.settings_service import get_business_info
 def create_pdf_with_letterhead(title):
     """
     Creates a new FPDF document with the business letterhead
-    (Name/Address/Phone/NTN - only the fields that are set) and a
+    (Logo/Name/Address/Phone/NTN - only the fields that are set) and a
     centered document title already drawn. Any invoice/receipt
     generator (Sales, Purchase, ...) starts from this.
     """
@@ -14,6 +14,13 @@ def create_pdf_with_letterhead(title):
     pdf = FPDF(format="A4")
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
+
+    logo_path = business.get("logo_path")
+    if logo_path:
+        try:
+            pdf.image(logo_path, x=10, y=8, h=16)
+        except Exception:
+            pass  # a corrupt/unreadable logo file should never break PDF generation
 
     if business["name"]:
         pdf.set_font("Helvetica", "B", 16)

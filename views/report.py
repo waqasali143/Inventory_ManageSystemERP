@@ -29,9 +29,10 @@ def open_report_window():
 
     win.withdraw()
     win.title("Business Reports")
+    win.iconbitmap("assets/ims.ico")
     win.configure(bg=BACKGROUND)
 
-    size_and_center(win, width_ratio=0.85, height_ratio=1, resizable=True)
+    size_and_center(win, width_ratio=0.92, height_ratio=1, resizable=True)
 
     apply_app_style()
 

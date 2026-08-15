@@ -136,6 +136,62 @@ def generate_sales_report_pdf(rows, date_from, date_to):
     open_pdf(file_path)
 
     return file_path
+
+
+# ================================================================
+# PRODUCT LIST (Products screen - "Print Product List" button)
+# ================================================================
+def generate_product_list_pdf(rows, search_term=None):
+    """
+    rows: the same rows shown in the Product Management table
+          (id, name, cost_price, sale_price, quantity, status, barcode)
+    Prints the currently visible list (respects an active search filter,
+    if any) with Cost Price and Stock Value (Cost Price x Quantity), so
+    it can double as a stock-value sheet for stock-taking or an auditor.
+    """
+    title = "PRODUCT LIST"
+    if search_term:
+        title += f' (filtered: "{search_term}")'
+
+    pdf = create_pdf_with_letterhead(title)
+
+    draw_items_table_header(pdf, [
+        ("Product Name", 54, "L"),
+        ("Barcode", 24, "L"),
+        ("Cost Price", 24, "R"),
+        ("Sale Price", 24, "R"),
+        ("Qty", 14, "C"),
+        ("Status", 22, "C"),
+        ("Stock Value", 28, "R"),
+    ])
+
+    total_qty = 0
+    total_stock_value = 0.0
+
+    for _id, name, cost_price, sale_price, quantity, status, barcode in rows:
+        stock_value = cost_price * quantity
+
+        pdf.cell(54, 8, str(name), border=1)
+        pdf.cell(24, 8, str(barcode or "-"), border=1)
+        pdf.cell(24, 8, format_currency(cost_price), border=1, align="R")
+        pdf.cell(24, 8, format_currency(sale_price), border=1, align="R")
+        pdf.cell(14, 8, str(quantity), border=1, align="C")
+        pdf.cell(22, 8, str(status), border=1, align="C")
+        pdf.cell(28, 8, format_currency(stock_value), border=1, align="R", ln=True)
+
+        total_qty += quantity
+        total_stock_value += stock_value
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(138, 8, f"Total ({len(rows)} products, {total_qty} units in stock)", border=1)
+    pdf.cell(52, 8, format_currency(total_stock_value), border=1, align="R", ln=True)
+
+    file_path = _unique_pdf_path("Product_List")
+    pdf.output(file_path)
+
+    open_pdf(file_path)
+
+    return file_path
 # ================================================================
 # PURCHASE RECEIPT
 # ================================================================

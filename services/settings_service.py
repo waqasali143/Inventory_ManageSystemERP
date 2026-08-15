@@ -1,7 +1,7 @@
-
+import os
 from repositories import settings_repository as repo
 from utils import event_bus
-from database.licensed_business import LOCKED_BUSINESS_NAME
+from database.licensed_business import LOCKED_BUSINESS_NAME, LOCKED_BUSINESS_LOGO_PATH
 
 # =====================================================================
 # Simple in-memory cache so every currency-formatting call across the
@@ -38,9 +38,23 @@ def format_currency(amount):
 # Business Info (for invoice letterhead)
 # =====================================================================
 
+def get_business_logo_path():
+    """
+    Returns the licensed client's logo file path if it's set AND the
+    file actually exists on disk - otherwise None. Centralizing this
+    check here means every caller (branding strip, PDF letterhead) can
+    just check for None instead of each re-implementing file-existence
+    and try/except handling.
+    """
+    if LOCKED_BUSINESS_LOGO_PATH and os.path.isfile(LOCKED_BUSINESS_LOGO_PATH):
+        return LOCKED_BUSINESS_LOGO_PATH
+    return None
+
+
 def get_business_info():
     return {
         "name": LOCKED_BUSINESS_NAME,
+        "logo_path": get_business_logo_path(),
         "address": repo.fetch_setting("business_address", default=""),
         "phone": repo.fetch_setting("business_phone", default=""),
         "ntn": repo.fetch_setting("business_ntn", default=""),
