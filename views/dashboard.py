@@ -17,16 +17,18 @@ from time import strftime
 from services.settings_service import get_currency, set_currency, format_currency,get_app_title, get_business_info
 from services.auth_service import has_permission, get_current_user, logout
 from views import role as role_view
-from views import product, supplier, customer, expense, user, business_settings
+from views import product, supplier, customer, expense, user, business_settings, backup_restore
 
 from views.report import open_report_window
 from views.about import open_about_window
 from views.credit_ledger import open_window as open_credit_ledger
+from services.backup_service import create_backup
 import sqlite3
 
 from utils import event_bus
 
 from views.sales import sales_window, open_sale_return_history_window, sales_history
+from views.pos import pos_window
 from views.purchase import purchase_window, open_return_history_window, purchase_history
 
 from utils.theme import (
@@ -63,6 +65,14 @@ class Dashboard:
         if hasattr(self, "datetime_job"):
             self.root.after_cancel(self.datetime_job)
         event_bus.unsubscribe(self.load_dashboard_data)
+
+        try:
+            create_backup()
+        except Exception as e:
+            # A failed backup should never prevent the app from closing -
+            # just log it, the user isn't blocked from exiting.
+            print("Auto-backup on close failed:", e)
+
         self.root.destroy()
 
 # =============================================================
@@ -72,6 +82,12 @@ class Dashboard:
         if hasattr(self, "datetime_job"):
             self.root.after_cancel(self.datetime_job)
         event_bus.unsubscribe(self.load_dashboard_data)
+
+        try:
+            create_backup()
+        except Exception as e:
+            print("Auto-backup on logout failed:", e)
+
         logout()
         self.root.destroy()
 
@@ -311,7 +327,7 @@ class Dashboard:
 
         Label(
             self.sidebar, text="MENU", bg=SIDEBAR, fg=WHITE,
-            font=("Segoe UI", 14, "bold")
+            font=("Segoe UI", 10, "bold")
         ).pack(pady=10)
 
         # ---------------- Fixed Footer: About + Logout (never scrolls away) ----------------
@@ -583,10 +599,22 @@ class Dashboard:
             supplier.open_window, locked=not has_permission("suppliers")
         )
 
+        # self.action_card(
+        #     self.action_frame, "💰", "Sales", "Create Invoice",
+        #     sales_window, locked=not has_permission("sales")
+        # )
+
+        # ---- POS mode: comment the Sales card above and uncomment the
+        # card below to show "POS" instead of "Sales" on the dashboard.
+        # Both use the same "sales" permission, so no roles/permissions
+        # setup is needed to switch between them.
         self.action_card(
-            self.action_frame, "💰", "Sales", "Create Invoice",
-            sales_window, locked=not has_permission("sales")
+            self.action_frame, "🧾", "POS", "Quick Sale",
+            pos_window, locked=not has_permission("sales")
         )
+# ========================================================================
+
+# ========================================================================
 
         self.action_card(
             self.action_frame, "🛒", "Purchase", "Stock Entry",
@@ -846,7 +874,7 @@ class Dashboard:
             anchor="w",
             padx=20
         )
-        btn.pack(fill=X, ipady=6)
+        btn.pack(fill=X, ipady=5)
 
         if not hasattr(self, "sidebar_buttons"):
             self.sidebar_buttons = {}
@@ -909,6 +937,7 @@ class Dashboard:
 
         if has_permission("sales"):
             self.sidebar_button("💰 Sales", sales_window, key="sales")
+            self.sidebar_button("🧾 POS (Quick Sale)", pos_window, key="pos")
 
         if has_permission("purchase"):
             self.sidebar_button("🛒 Purchase", purchase_window, key="purchase")
@@ -931,6 +960,7 @@ class Dashboard:
 
         if has_permission("business_settings"):
             self.sidebar_button("⚙ Business Settings", business_settings.open_window, key="business_settings")
+            self.sidebar_button("💾 Backup & Restore", backup_restore.open_window, key="backup")
 
         if has_permission("reports"):
             self.sidebar_button("📊 Reports", command=open_report_window, key="reports")

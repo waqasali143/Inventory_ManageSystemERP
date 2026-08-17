@@ -28,6 +28,42 @@ def load_customers(search_term=None):
     return repo.fetch_customers(search_term)
 
 # =====================================
+# Quick Add (POS - walk-in customer)
+# Lightweight path used by the POS window when a typed customer name
+# doesn't match an existing record: no tkinter Variable wrapping, no
+# validation dialog/popup - just the essentials (name + contact) so
+# checkout isn't interrupted. Anything more (email/address/NTN/Filer
+# status) can be filled in later from the Customers screen.
+# =====================================
+def quick_add_customer(name, contact):
+    new_id = repo.insert_customer(name.strip(), contact.strip(), "", "", "", 0)
+    event_bus.publish()
+    return new_id
+
+
+WALKIN_CUSTOMER_NAME = "Walk-in Customer"
+
+
+def get_or_create_walkin_customer_id():
+    """
+    Used by POS when the Customer field is left blank - every nameless
+    sale is attributed to one shared "Walk-in Customer" record instead
+    of leaving the sale without a customer at all (which the rest of
+    the app - Credit Ledger, per-customer history - doesn't expect).
+    """
+    existing_id = repo.fetch_customer_id_by_name_and_contact(WALKIN_CUSTOMER_NAME, "")
+    if existing_id is not None:
+        return existing_id
+
+    new_id = repo.insert_customer(WALKIN_CUSTOMER_NAME, "", "", "", "", 0)
+    event_bus.publish()
+    return new_id
+
+
+def get_customer_id_by_name_and_contact(name, contact):
+    return repo.fetch_customer_id_by_name_and_contact(name, contact)
+
+# =====================================
 # Save Customer
 # =====================================
 def save_customer(name, contact, email, address, ntn=None, is_filer=None):

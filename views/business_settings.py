@@ -1,7 +1,10 @@
 from tkinter import *
 from tkinter import messagebox
 from services.tax_service import get_filer_tax_rate, get_non_filer_tax_rate, set_tax_rates
-from services.settings_service import get_business_info, save_business_info
+from services.settings_service import (
+    get_business_info, save_business_info,
+    get_receipt_printer_type, set_receipt_printer_type
+)
 from utils.theme import (
     PRIMARY, BACKGROUND, WHITE,
     FONT_TITLE, FONT_BODY_BOLD,
@@ -27,7 +30,7 @@ def open_window():
     win.title("Business Settings")
     win.configure(bg=BACKGROUND)
 
-    size_and_center(win, width_ratio=0.4, height_ratio=0.55, resizable=False)
+    size_and_center(win, width_ratio=0.4, height_ratio=0.72, resizable=False)
 
     apply_app_style()
 
@@ -123,3 +126,33 @@ def open_window():
         tax_frame, text="💾 Save Tax Rates", bg=PRIMARY, fg=WHITE,
         relief=FLAT, cursor="hand2", command=handle_save_tax_rates
     ).grid(row=2, column=0, columnspan=2, pady=15, sticky="ew", padx=10, ipady=6)
+
+    # ---------------- Receipt Printer ----------------
+    printer_frame = LabelFrame(
+        win, text="Receipt Printer", bg=BACKGROUND,
+        font=FONT_BODY_BOLD, padx=10, pady=10
+    )
+    printer_frame.pack(fill="x", padx=20, pady=(0, 20))
+
+    printer_type = StringVar(value=get_receipt_printer_type())
+
+    printer_options = [
+        ("thermal_80mm", "Thermal 80mm (most common POS printer)"),
+        ("thermal_58mm", "Thermal 58mm (small/mobile printer)"),
+        ("a4", "A4 (regular office printer)"),
+    ]
+
+    for i, (value, label) in enumerate(printer_options):
+        Radiobutton(
+            printer_frame, text=label, value=value, variable=printer_type,
+            bg=BACKGROUND, anchor="w"
+        ).grid(row=i, column=0, sticky="w", padx=5, pady=3)
+
+    def handle_save_printer_type():
+        set_receipt_printer_type(printer_type.get())
+        messagebox.showinfo("Success", "Receipt printer setting saved.")
+
+    Button(
+        printer_frame, text="💾 Save Printer Setting", bg=PRIMARY, fg=WHITE,
+        relief=FLAT, cursor="hand2", command=handle_save_printer_type
+    ).grid(row=len(printer_options), column=0, pady=(10, 5), sticky="ew", padx=5, ipady=6)

@@ -1,4 +1,3 @@
-
 import sqlite3
 
 from tkinter import messagebox
@@ -36,9 +35,9 @@ def get_product_details(product_id):
 # =====================================
 # Validate Sale Line (before adding to cart)
 # =====================================
-def validate_sale_line(customer, product, quantity, available_stock):
+def validate_sale_line(customer, product, quantity, available_stock, require_customer=True):
 
-    if customer.get() == "":
+    if require_customer and customer.get() == "":
         messagebox.showerror("Validation Error", "Please select customer.")
         return False
 
@@ -151,9 +150,16 @@ def _extract_cart_items(cart_tree):
 # Re-checks live stock right before committing, since time may have
 # passed since the item was added to the cart.
 # =====================================
-def save_sale(customer, cart_tree, summary, payment_type=None, amount_paid_str=None):
+def save_sale(customer, cart_tree, summary, payment_type=None, amount_paid_str=None, customer_id=None):
+    """
+    customer_id: optional pre-resolved customer id. Pass this when the
+    caller has already determined exactly which customer record this is
+    (e.g. POS resolving a walk-in by name+contact) - otherwise save_sale
+    falls back to looking the id up by name alone, which is ambiguous
+    if two different customers happen to share the same name.
+    """
 
-    if customer.get().strip() == "":
+    if customer_id is None and customer.get().strip() == "":
         messagebox.showerror("Error", "Please select a customer.")
         return False
 
@@ -206,10 +212,11 @@ def save_sale(customer, cart_tree, summary, payment_type=None, amount_paid_str=N
 
     try:
         sale_no = repo.generate_sale_no()
-        customer_id = repo.fetch_customer_id(customer.get().strip())
+        resolved_customer_id = customer_id if customer_id is not None \
+            else repo.fetch_customer_id(customer.get().strip())
 
         sale_id = repo.insert_sale_header(
-            cursor, sale_no, customer_id,
+            cursor, sale_no, resolved_customer_id,
             gross, discount, discount_amount, tax, tax_amount, net_total,
             payment_status, amount_paid
         )

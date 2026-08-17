@@ -8,13 +8,13 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-APP_NAME = "Inventra ERP"
+APP_NAME = "Inventra POS & ERP"
 
 
 def add_branding_strip(win, bg="#E5E7EB", fg="#4B5563"):
     """
     Adds a slim identity strip to the very top of any window:
-    "[logo] Inventra ERP | <Business Name>" on the left,
+    "[logo] Inventra POS & ERP | <Business Name>" on the left,
     "<logged-in user>" on the right.
     Call this FIRST, before building the window's own colored header.
     """

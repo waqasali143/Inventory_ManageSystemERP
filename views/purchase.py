@@ -279,12 +279,13 @@ def purchase_window():
     add_branding_strip(win)
     
     win.title("Purchase Management")
-    win.iconbitmap("assets/ims.ico")
     win.state("zoomed")   # window
 
     # Center Window
     width = 1150
     height = 700
+
+    win.iconbitmap("assets/ims.ico")
 
     screen_width = win.winfo_screenwidth()
     screen_height = win.winfo_screenheight()
@@ -817,7 +818,6 @@ def purchase_history():
 
     history_win = Toplevel()
     history_win.title("Purchase History")
-    history_win.iconbitmap("assets/ims.ico")
     screen_width = history_win.winfo_screenwidth()
     screen_height = history_win.winfo_screenheight()
 
@@ -832,6 +832,9 @@ def purchase_history():
     )
 
     history_win.minsize(950, 500)
+
+    history_win.iconbitmap("assets/ims.ico")
+
 # ========================================================================
     # Search Frame
 # =========================================================================

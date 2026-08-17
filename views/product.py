@@ -129,10 +129,11 @@ def open_window():
     add_branding_strip(win)
 
     win.title("Inventory Management System | Product Management")
+    size_and_center(win, width_ratio=0.93, height_ratio=0.9, resizable=True)
+
     win.iconbitmap("assets/ims.ico")
     win.configure(bg=BACKGROUND)
 
-    size_and_center(win, width_ratio=0.93, height_ratio=0.9, resizable=True)
 
     apply_app_style()
 

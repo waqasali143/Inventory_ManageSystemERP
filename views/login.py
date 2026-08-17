@@ -29,7 +29,7 @@ def open_login_window(on_success):
 
     win = Tk()
     win.withdraw()
-    win.title("Inventra ERP | Login")
+    win.title("Inventra POS & ERP | Login")
     try:
         win.iconbitmap("assets/ims.ico")
     except Exception:
@@ -59,13 +59,13 @@ def open_login_window(on_success):
         except Exception as e:
             print("LOGO LOAD FAILED:", e)
             Label(
-                header_frame, text="Inventra ERP",
+                header_frame, text="Inventra POS & ERP",
                 bg=PRIMARY, fg=WHITE, font=FONT_BODY_BOLD
             ).pack(pady=(25, 5))
     else:
         print("PIL not available")
         Label(
-            header_frame, text="Inventra ERP",
+            header_frame, text="Inventra POS & ERP",
             bg=PRIMARY, fg=WHITE, font=FONT_BODY_BOLD
         ).pack(pady=(25, 5))
 # --------------------------------------------------------------------

@@ -2,10 +2,13 @@ import tempfile
 import os
 
 from datetime import datetime
-from services.settings_service import format_currency
+from services.settings_service import format_currency, get_receipt_printer_type
 from services.sales_service import get_sale_header, get_sale_items, get_customer_id_by_name
 from services.customer_service import get_customer_filer_status, get_customer_ntn
-from utils.pdf_helpers import create_pdf_with_letterhead, draw_items_table_header, open_pdf
+from utils.pdf_helpers import (
+    create_pdf_with_letterhead, create_thermal_pdf_with_letterhead,
+    draw_items_table_header, open_pdf
+)
 
 
 def _unique_pdf_path(base_name):
@@ -22,6 +25,22 @@ def _unique_pdf_path(base_name):
 
 
 def generate_sale_invoice(sale_id):
+    """
+    Prints the sale invoice using whichever Receipt Printer type is
+    set in Business Settings (A4 / Thermal 80mm / Thermal 58mm) -
+    callers never need to know or care which layout was used.
+    """
+    printer_type = get_receipt_printer_type()
+
+    if printer_type == "thermal_80mm":
+        return _generate_sale_invoice_thermal(sale_id, paper_width_mm=80)
+    elif printer_type == "thermal_58mm":
+        return _generate_sale_invoice_thermal(sale_id, paper_width_mm=58)
+    else:
+        return generate_sale_invoice_a4(sale_id)
+
+
+def generate_sale_invoice_a4(sale_id):
 
     (
         sale_no, customer_name, sale_date,
@@ -92,6 +111,80 @@ def generate_sale_invoice(sale_id):
     pdf.ln(15)
     pdf.set_font("Helvetica", "I", 8)
     pdf.cell(0, 5, f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}", align="C")
+
+    file_path = _unique_pdf_path(sale_no)
+    pdf.output(file_path)
+
+    open_pdf(file_path)
+
+    return file_path
+# ================================================================
+
+
+def _generate_sale_invoice_thermal(sale_id, paper_width_mm=80):
+
+    (
+        sale_no, customer_name, sale_date,
+        gross_total, discount, discount_amount,
+        tax, tax_amount, net_total,
+        payment_status, amount_paid
+    ) = get_sale_header(sale_id)
+
+    items = get_sale_items(sale_id)
+
+    pdf = create_thermal_pdf_with_letterhead("SALES RECEIPT", paper_width_mm)
+    content_w = paper_width_mm - 6
+
+    pdf.set_font("Helvetica", "", 7.5)
+    pdf.cell(content_w, 4, f"Invoice: {sale_no}", ln=True)
+    pdf.cell(content_w, 4, f"Date: {sale_date}", ln=True)
+    pdf.multi_cell(content_w, 4, f"Customer: {customer_name}")
+
+    customer_id = get_customer_id_by_name(customer_name)
+    if customer_id and get_customer_filer_status(customer_id):
+        ntn = get_customer_ntn(customer_id)
+        pdf.cell(content_w, 4, f"NTN: {ntn}", ln=True)
+
+    pdf.ln(1)
+    pdf.set_draw_color(150, 150, 150)
+    pdf.line(pdf.l_margin, pdf.get_y(), paper_width_mm - pdf.r_margin, pdf.get_y())
+    pdf.ln(2)
+
+    # ---- Items: name on its own line, "qty x price" / subtotal below -
+    # a single row per item doesn't fit legibly at 58-80mm width.
+    for product, price, qty, subtotal in items:
+        pdf.set_font("Helvetica", "B", 7.5)
+        pdf.multi_cell(content_w, 3.6, str(product))
+        pdf.set_font("Helvetica", "", 7.5)
+        pdf.cell(content_w * 0.6, 3.6, f"{qty} x {format_currency(price)}")
+        pdf.cell(content_w * 0.4, 3.6, format_currency(subtotal), align="R", ln=True)
+
+    pdf.ln(1)
+    pdf.line(pdf.l_margin, pdf.get_y(), paper_width_mm - pdf.r_margin, pdf.get_y())
+    pdf.ln(2)
+
+    def totals_row(label, value, bold=False):
+        pdf.set_font("Helvetica", "B" if bold else "", 7.5)
+        pdf.cell(content_w * 0.6, 4, label)
+        pdf.cell(content_w * 0.4, 4, value, align="R", ln=True)
+
+    totals_row("Gross Total:", format_currency(gross_total))
+    totals_row(f"Discount ({discount}%):", format_currency(discount_amount))
+    totals_row(f"Tax ({tax}%):", format_currency(tax_amount))
+    totals_row("Net Total:", format_currency(net_total), bold=True)
+
+    balance_due = net_total - amount_paid
+    if payment_status != "Paid":
+        pdf.ln(1)
+        totals_row("Amount Paid:", format_currency(amount_paid))
+        totals_row(f"Balance ({payment_status}):", format_currency(balance_due), bold=True)
+
+    pdf.ln(3)
+    pdf.set_font("Helvetica", "I", 6.5)
+    pdf.multi_cell(content_w, 3, f"Printed {datetime.now().strftime('%Y-%m-%d %H:%M')}", align="C")
+    pdf.ln(1)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.multi_cell(content_w, 4, "Thank you for your business!", align="C")
 
     file_path = _unique_pdf_path(sale_no)
     pdf.output(file_path)

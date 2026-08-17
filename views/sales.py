@@ -18,7 +18,7 @@ from services.sales_service import (
     get_all_sale_returns
 )
 from services.settings_service import format_currency
-from services.invoice_service import generate_sale_invoice, generate_sales_report_pdf
+from services.invoice_service import generate_sale_invoice_a4, generate_sales_report_pdf
 from utils.shortcut_helper import bind_shortcuts
 from services.customer_service import get_customer_filer_status
 from services.tax_service import get_applicable_tax_rate
@@ -32,9 +32,10 @@ def sales_window():
     add_branding_strip(win)
 
     win.title("Sales Management")
+    size_and_center(win, width_ratio=0.9, height_ratio=0.88, resizable=True)
+
     win.iconbitmap("assets/ims.ico")
 
-    size_and_center(win, width_ratio=0.9, height_ratio=0.88, resizable=True)
 
     win.focus_force()
 
@@ -109,7 +110,7 @@ def sales_window():
     # Discount %
     # -------------------------------------
     Label(totals_frame, text="Discount %").grid(row=0, column=2, padx=5, pady=5)
-    discount_entry = Entry(totals_frame, textvariable=summary.discount, width=12, justify="right")
+    discount_entry = Entry(totals_frame, textvariable=summary.discount, width=16, justify="right")
     discount_entry.grid(row=0, column=3, padx=5, pady=5)
     discount_entry.bind("<KeyRelease>", lambda event: refresh_totals())
 
@@ -127,7 +128,7 @@ def sales_window():
     # Tax %
     # ---------------------------------
     Label(totals_frame, text="Tax %").grid(row=1, column=0, padx=5, pady=5)
-    tax_entry = Entry(totals_frame, textvariable=summary.tax, width=12, justify="right")
+    tax_entry = Entry(totals_frame, textvariable=summary.tax, width=16, justify="right")
     tax_entry.grid(row=1, column=1, padx=5, pady=5)
     tax_entry.bind("<KeyRelease>", lambda event: refresh_totals())
 
@@ -637,8 +638,9 @@ def sales_history():
 
     history_win = Toplevel()
     history_win.title("Sales History")
-    history_win.iconbitmap("assets/ims.ico")
     size_and_center(history_win, width_ratio=0.9, height_ratio=0.75, resizable=True)
+
+    history_win.iconbitmap("assets/ims.ico")
     search_frame = LabelFrame(history_win, text="Search Sale", padx=10, pady=10)
     search_frame.pack(fill="x", padx=10, pady=10)
 # ======================================================================================
@@ -710,7 +712,7 @@ def sales_history():
             messagebox.showerror("Error", "Please select a sale from the list first.")
             return
         values = history_tree.item(selected, "values")
-        generate_sale_invoice(values[0])
+        generate_sale_invoice_a4(values[0])
 
 # ===========================
 #   Keyboard Shortcut
@@ -901,7 +903,7 @@ def show_sale_details(sale_id):
 
     Button(
             details_win, text="🖨 Print Invoice", width=20,
-            command=lambda: generate_sale_invoice(sale_id)
+            command=lambda: generate_sale_invoice_a4(sale_id)
         ).pack(side=BOTTOM, pady=(0, 15))
 
 # =====================================

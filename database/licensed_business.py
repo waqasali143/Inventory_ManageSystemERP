@@ -13,4 +13,5 @@ LOCKED_BUSINESS_NAME = "My Trading Name"   # e.g. "Ahmed Traders" - fill in befo
 # this at it. Leave as "" if the client has no logo - every place that
 # reads this handles a missing/blank logo gracefully (nothing is shown,
 # nothing breaks).
+
 LOCKED_BUSINESS_LOGO_PATH = "assets/client_logo.png"   # e.g. "assets/ahmed_traders_logo.png"

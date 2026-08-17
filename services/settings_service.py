@@ -71,5 +71,25 @@ def save_business_info(address, phone, ntn):
 def get_app_title():
     business_name = get_business_info()["name"]
     if business_name:
-        return f"Inventra ERP — {business_name}"
-    return "Inventra ERP"
+        return f"Inventra POS & ERP — {business_name}"
+    return "Inventra POS & ERP"
+
+# =====================================================================
+# Receipt Printer Type
+# Controls whether Sale/Purchase invoices print as a full A4 page or
+# a compact thermal receipt. Defaults to "thermal_80mm" since that's
+# the most common POS printer size in use.
+# =====================================================================
+
+VALID_PRINTER_TYPES = ("a4", "thermal_80mm", "thermal_58mm")
+
+def get_receipt_printer_type():
+    value = repo.fetch_setting("receipt_printer_type", default="thermal_80mm")
+    return value if value in VALID_PRINTER_TYPES else "thermal_80mm"
+
+
+def set_receipt_printer_type(printer_type):
+    if printer_type not in VALID_PRINTER_TYPES:
+        raise ValueError(f"Unknown printer type: {printer_type}")
+    repo.save_setting("receipt_printer_type", printer_type)
+    event_bus.publish()

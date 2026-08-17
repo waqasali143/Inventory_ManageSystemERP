@@ -1,6 +1,27 @@
 import sqlite3
 from database.database import get_connection
 
+def fetch_customer_id_by_name_and_contact(name, contact):
+    """
+    Matches on Name AND Contact together, not name alone - two different
+    real customers can share the same name, so name-only matching risks
+    silently attributing a sale to the wrong person. Used by POS's
+    walk-in flow, where a new customer is captured inline rather than
+    picked from an existing registered list.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT id FROM customers WHERE LOWER(name) = LOWER(?) AND contact = ?",
+        (name, contact)
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    return row[0] if row else None
+
+
 def fetch_customers(search_term=None):
 
     conn = get_connection()
@@ -33,8 +54,12 @@ def insert_customer(name, contact, email, address, ntn="", is_filer=0):
         VALUES (?, ?, ?, ?, ?, ?)
     """, (name, contact, email, address, ntn, is_filer))
 
+    new_id = cursor.lastrowid
+
     conn.commit()
     conn.close()
+
+    return new_id
 
 def update_customer(customer_id, name, contact, email, address, ntn="", is_filer=0):
 
