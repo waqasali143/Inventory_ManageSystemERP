@@ -259,7 +259,9 @@ def open_window():
 
         win = Toplevel()
         win.title(f"Sales History - {name.get()}")
-        size_and_center(win, width_ratio=0.7, height_ratio=1, resizable=True)
+        size_and_center(win, width_ratio=0.85, height_ratio=1, resizable=True)
+
+        win.iconbitmap("assets/ims.ico")
 
         apply_app_style()
 

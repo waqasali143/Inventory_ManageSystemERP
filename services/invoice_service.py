@@ -24,6 +24,24 @@ def _unique_pdf_path(base_name):
     return os.path.join(tempfile.gettempdir(), f"{base_name}_{timestamp}.pdf")
 
 
+def _fit_text(value, max_chars=14):
+    """
+    FPDF's cell() doesn't wrap or clip text - a string longer than its
+    column bleeds into the neighboring cell. Used for fields with
+    unpredictable length (e.g. contact numbers can be any length),
+    where a fixed column width alone can't guarantee it'll fit.
+
+    Uses three ASCII dots ("...") rather than the single Unicode
+    ellipsis character ("…") - the standard PDF core font ("helvetica")
+    only supports WinAnsi/Latin-1 characters, and "…" isn't one of
+    them, which raises FPDFUnicodeEncodingException.
+    """
+    text = str(value) if value else ""
+    if len(text) > max_chars:
+        return text[:max_chars - 3] + "..."
+    return text
+
+
 def generate_sale_invoice(sale_id):
     """
     Prints the sale invoice using whichever Receipt Printer type is
@@ -656,25 +674,25 @@ def generate_business_report_pdf(data, date_from, date_to, product_details=None,
         pdf.cell(0, 8, "Customers - Balance Owed", ln=True)
 
         draw_items_table_header(pdf, [
-            ("Customer", 40, "L"),
-            ("Contact", 26, "L"),
-            ("Balance", 26, "R"),
-            ("Paid", 24, "R"),
-            ("Inv", 14, "C"),
-            ("Last Amt", 32, "R"),
-            ("Last Date", 28, "C"),
+            ("Customer", 38, "L"),
+            ("Contact", 32, "L"),
+            ("Balance", 32, "R"),
+            ("Paid", 28, "R"),
+            ("Inv", 10, "C"),
+            ("Last Amt", 28, "R"),
+            ("Last Date", 22, "C"),
         ])
 
         for _id, name, contact, balance, amount_paid, open_invoices, \
                 last_payment_amount, last_payment_date in credit_data["customers"]:
-            pdf.cell(40, 8, str(name), border=1)
-            pdf.cell(26, 8, str(contact), border=1)
-            pdf.cell(26, 8, format_currency(balance), border=1, align="R")
-            pdf.cell(24, 8, format_currency(amount_paid), border=1, align="R")
-            pdf.cell(14, 8, str(open_invoices), border=1, align="C")
-            pdf.cell(32, 8, format_currency(last_payment_amount) if last_payment_amount is not None else "-",
+            pdf.cell(38, 8, _fit_text(name, 18), border=1)
+            pdf.cell(32, 8, _fit_text(contact, 15), border=1)
+            pdf.cell(32, 8, format_currency(balance), border=1, align="R")
+            pdf.cell(28, 8, format_currency(amount_paid), border=1, align="R")
+            pdf.cell(10, 8, str(open_invoices), border=1, align="C")
+            pdf.cell(28, 8, format_currency(last_payment_amount) if last_payment_amount is not None else "-",
                       border=1, align="R")
-            pdf.cell(28, 8, last_payment_date or "-", border=1, align="C", ln=True)
+            pdf.cell(22, 8, last_payment_date or "-", border=1, align="C", ln=True)
 
         if not credit_data["customers"]:
             pdf.set_font("Helvetica", "I", 9)
@@ -686,25 +704,25 @@ def generate_business_report_pdf(data, date_from, date_to, product_details=None,
         pdf.cell(0, 8, "Suppliers - Balance We Owe", ln=True)
 
         draw_items_table_header(pdf, [
-            ("Supplier", 40, "L"),
-            ("Contact", 26, "L"),
-            ("Balance", 26, "R"),
-            ("Paid", 24, "R"),
-            ("Inv", 14, "C"),
-            ("Last Amt", 32, "R"),
-            ("Last Date", 28, "C"),
+            ("Supplier", 38, "L"),
+            ("Contact", 32, "L"),
+            ("Balance", 32, "R"),
+            ("Paid", 28, "R"),
+            ("Inv", 10, "C"),
+            ("Last Amt", 28, "R"),
+            ("Last Date", 22, "C"),
         ])
 
         for _id, name, contact, balance, amount_paid, open_invoices, \
                 last_payment_amount, last_payment_date in credit_data["suppliers"]:
-            pdf.cell(40, 8, str(name), border=1)
-            pdf.cell(26, 8, str(contact), border=1)
-            pdf.cell(26, 8, format_currency(balance), border=1, align="R")
-            pdf.cell(24, 8, format_currency(amount_paid), border=1, align="R")
-            pdf.cell(14, 8, str(open_invoices), border=1, align="C")
-            pdf.cell(32, 8, format_currency(last_payment_amount) if last_payment_amount is not None else "-",
+            pdf.cell(38, 8, _fit_text(name, 18), border=1)
+            pdf.cell(32, 8, _fit_text(contact, 15), border=1)
+            pdf.cell(32, 8, format_currency(balance), border=1, align="R")
+            pdf.cell(28, 8, format_currency(amount_paid), border=1, align="R")
+            pdf.cell(10, 8, str(open_invoices), border=1, align="C")
+            pdf.cell(28, 8, format_currency(last_payment_amount) if last_payment_amount is not None else "-",
                       border=1, align="R")
-            pdf.cell(28, 8, last_payment_date or "-", border=1, align="C", ln=True)
+            pdf.cell(22, 8, last_payment_date or "-", border=1, align="C", ln=True)
 
         if not credit_data["suppliers"]:
             pdf.set_font("Helvetica", "I", 9)
@@ -751,25 +769,25 @@ def generate_credit_report_pdf(report_data):
     pdf.cell(0, 8, "Customers - Balance Owed", ln=True)
 
     draw_items_table_header(pdf, [
-        ("Customer", 40, "L"),
-        ("Contact", 26, "L"),
-        ("Balance", 26, "R"),
-        ("Paid", 24, "R"),
-        ("Inv", 14, "C"),
-        ("Last Amt", 32, "R"),
-        ("Last Date", 28, "C"),
+        ("Customer", 38, "L"),
+        ("Contact", 32, "L"),
+        ("Balance", 32, "R"),
+        ("Paid", 28, "R"),
+        ("Inv", 10, "C"),
+        ("Last Amt", 28, "R"),
+        ("Last Date", 22, "C"),
     ])
 
     for customer_id, name, contact, balance, amount_paid, open_invoices, \
             last_payment_amount, last_payment_date in report_data["customers"]:
-        pdf.cell(40, 8, str(name), border=1)
-        pdf.cell(26, 8, str(contact), border=1)
-        pdf.cell(26, 8, format_currency(balance), border=1, align="R")
-        pdf.cell(24, 8, format_currency(amount_paid), border=1, align="R")
-        pdf.cell(14, 8, str(open_invoices), border=1, align="C")
-        pdf.cell(32, 8, format_currency(last_payment_amount) if last_payment_amount is not None else "-",
+        pdf.cell(38, 8, _fit_text(name, 18), border=1)
+        pdf.cell(32, 8, _fit_text(contact, 15), border=1)
+        pdf.cell(32, 8, format_currency(balance), border=1, align="R")
+        pdf.cell(28, 8, format_currency(amount_paid), border=1, align="R")
+        pdf.cell(10, 8, str(open_invoices), border=1, align="C")
+        pdf.cell(28, 8, format_currency(last_payment_amount) if last_payment_amount is not None else "-",
                   border=1, align="R")
-        pdf.cell(28, 8, last_payment_date or "-", border=1, align="C", ln=True)
+        pdf.cell(22, 8, last_payment_date or "-", border=1, align="C", ln=True)
 
     pdf.ln(6)
 
@@ -778,25 +796,25 @@ def generate_credit_report_pdf(report_data):
     pdf.cell(0, 8, "Suppliers - Balance We Owe", ln=True)
 
     draw_items_table_header(pdf, [
-        ("Supplier", 40, "L"),
-        ("Contact", 26, "L"),
-        ("Balance", 26, "R"),
-        ("Paid", 24, "R"),
-        ("Inv", 14, "C"),
-        ("Last Amt", 32, "R"),
-        ("Last Date", 28, "C"),
+        ("Supplier", 38, "L"),
+        ("Contact", 32, "L"),
+        ("Balance", 32, "R"),
+        ("Paid", 28, "R"),
+        ("Inv", 10, "C"),
+        ("Last Amt", 28, "R"),
+        ("Last Date", 22, "C"),
     ])
 
     for supplier_id, name, contact, balance, amount_paid, open_invoices, \
             last_payment_amount, last_payment_date in report_data["suppliers"]:
-        pdf.cell(40, 8, str(name), border=1)
-        pdf.cell(26, 8, str(contact), border=1)
-        pdf.cell(26, 8, format_currency(balance), border=1, align="R")
-        pdf.cell(24, 8, format_currency(amount_paid), border=1, align="R")
-        pdf.cell(14, 8, str(open_invoices), border=1, align="C")
-        pdf.cell(32, 8, format_currency(last_payment_amount) if last_payment_amount is not None else "-",
+        pdf.cell(38, 8, _fit_text(name, 18), border=1)
+        pdf.cell(32, 8, _fit_text(contact, 15), border=1)
+        pdf.cell(32, 8, format_currency(balance), border=1, align="R")
+        pdf.cell(28, 8, format_currency(amount_paid), border=1, align="R")
+        pdf.cell(10, 8, str(open_invoices), border=1, align="C")
+        pdf.cell(28, 8, format_currency(last_payment_amount) if last_payment_amount is not None else "-",
                   border=1, align="R")
-        pdf.cell(28, 8, last_payment_date or "-", border=1, align="C", ln=True)
+        pdf.cell(22, 8, last_payment_date or "-", border=1, align="C", ln=True)
 
     pdf.ln(15)
     pdf.set_font("Helvetica", "I", 8)
@@ -818,10 +836,11 @@ def generate_credit_report_pdf(report_data):
 def generate_credit_statement_pdf(party_type, party_name, credit_rows, payment_rows):
     """
     party_type: "Customer" or "Supplier"
-    credit_rows: (no, date, net_total, amount_paid_at_sale, balance, payment_status)
+    credit_rows: (id, no, date, net_total, amount_paid_at_sale, balance, payment_status)
                  - same as get_customer_credit_sales()/get_supplier_credit_purchases()
-    payment_rows: (date, amount, notes)
+    payment_rows: (date, amount, notes, invoice_no)
                  - same as get_customer_payment_history()/get_supplier_payment_history()
+                 - invoice_no is None for a general/untargeted payment
     """
     pdf = create_pdf_with_letterhead(f"{party_type.upper()} CREDIT STATEMENT - {party_name}")
 
@@ -840,7 +859,7 @@ def generate_credit_statement_pdf(party_type, party_name, credit_rows, payment_r
     ])
 
     total_balance = 0.0
-    for no, date_str, net_total, amount_paid, balance, payment_status in credit_rows:
+    for _id, no, date_str, net_total, amount_paid, balance, payment_status in credit_rows:
         pdf.cell(34, 8, str(no), border=1)
         pdf.cell(38, 8, str(date_str), border=1)
         pdf.cell(32, 8, format_currency(net_total), border=1, align="R")
@@ -855,8 +874,9 @@ def generate_credit_statement_pdf(party_type, party_name, credit_rows, payment_r
         pdf.set_font("Helvetica", "", 10)
     else:
         pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(168, 8, "Total Outstanding Balance", border=1)
-        pdf.cell(22, 8, format_currency(total_balance), border=1, align="R", ln=True)
+        pdf.cell(136, 8, "Total Outstanding Balance", border=1)
+        pdf.cell(32, 8, format_currency(total_balance), border=1, align="R")
+        pdf.cell(22, 8, "", border=1, ln=True)
         pdf.set_font("Helvetica", "", 10)
 
     pdf.ln(6)
@@ -867,16 +887,18 @@ def generate_credit_statement_pdf(party_type, party_name, credit_rows, payment_r
     pdf.cell(0, 8, payment_label, ln=True)
 
     draw_items_table_header(pdf, [
-        ("Date", 40, "L"),
-        ("Amount", 40, "R"),
-        ("Notes", 110, "L"),
+        ("Date", 34, "L"),
+        ("Amount", 32, "R"),
+        ("Applied To Invoice", 44, "C"),
+        ("Notes", 80, "L"),
     ])
 
     total_paid = 0.0
-    for date_str, amount, notes in payment_rows:
-        pdf.cell(40, 8, str(date_str), border=1)
-        pdf.cell(40, 8, format_currency(amount), border=1, align="R")
-        pdf.cell(110, 8, str(notes or ""), border=1, ln=True)
+    for date_str, amount, notes, invoice_no in payment_rows:
+        pdf.cell(34, 8, str(date_str), border=1)
+        pdf.cell(32, 8, format_currency(amount), border=1, align="R")
+        pdf.cell(44, 8, str(invoice_no) if invoice_no else "General payment", border=1, align="C")
+        pdf.cell(80, 8, str(notes or ""), border=1, ln=True)
         total_paid += amount
 
     if not payment_rows:
@@ -884,8 +906,9 @@ def generate_credit_statement_pdf(party_type, party_name, credit_rows, payment_r
         pdf.cell(0, 7, "No payments recorded yet.", ln=True)
     else:
         pdf.set_font("Helvetica", "B", 10)
-        pdf.cell(80, 8, "Total Paid", border=1)
-        pdf.cell(40, 8, format_currency(total_paid), border=1, align="R", ln=True)
+        pdf.cell(34, 8, "Total Paid", border=1)
+        pdf.cell(32, 8, format_currency(total_paid), border=1, align="R")
+        pdf.cell(124, 8, "", border=1, ln=True)
 
     file_path = _unique_pdf_path(f"Statement_{party_name}")
     pdf.output(file_path)

@@ -33,6 +33,7 @@ def open_window():
     size_and_center(win, width_ratio=0.4, height_ratio=0.72, resizable=False)
 
     apply_app_style()
+    win.iconbitmap("assets/ims.ico")
 
     # ---------------- Header ----------------
     header_frame = Frame(win, bg=PRIMARY, height=60)

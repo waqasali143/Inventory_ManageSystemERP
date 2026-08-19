@@ -1,4 +1,3 @@
-
 from tkinter import *
 from tkinter import messagebox
 
@@ -38,12 +37,12 @@ def open_login_window(on_success):
     add_branding_strip(win)
     win.configure(bg=BACKGROUND)
 
-    size_and_center(win, width_ratio=0.28, height_ratio=0.72, resizable=False)
+    size_and_center(win, width_ratio=0.28, height_ratio=0.8, resizable=False)
 
     apply_app_style()
 
     # ---------------- Header ----------------
-    header_frame = Frame(win, bg=PRIMARY, height=140)
+    header_frame = Frame(win, bg=PRIMARY, height=210)
     header_frame.pack(fill=X)
     header_frame.pack_propagate(False)
 

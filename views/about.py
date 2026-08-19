@@ -44,11 +44,12 @@ def open_about_window():
     win.title("About")
     win.configure(bg=BACKGROUND)
 
-    size_and_center(win, width_ratio=0.34, height_ratio=0.9, resizable=False)
+    size_and_center(win, width_ratio=0.34, height_ratio=0.91, resizable=False)
     apply_app_style()
+    win.iconbitmap("assets/ims.ico")
 
     # ---------------- Header ----------------
-    header_frame = Frame(win, bg=PRIMARY, height=110)
+    header_frame = Frame(win, bg=PRIMARY, height=150)
     header_frame.pack(fill=X)
     header_frame.pack_propagate(False)
 

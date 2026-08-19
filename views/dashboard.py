@@ -21,6 +21,7 @@ from views import product, supplier, customer, expense, user, business_settings,
 
 from views.report import open_report_window
 from views.about import open_about_window
+from views.license_window import open_window as open_license_window
 from views.credit_ledger import open_window as open_credit_ledger
 from services.backup_service import create_backup
 import sqlite3
@@ -330,9 +331,18 @@ class Dashboard:
             font=("Segoe UI", 10, "bold")
         ).pack(pady=10)
 
-        # ---------------- Fixed Footer: About + Logout (never scrolls away) ----------------
+        # ---------------- Fixed Footer: License + About + Logout (never scrolls away) ----------------
         footer = Frame(self.sidebar, bg=SIDEBAR)
         footer.pack(side=BOTTOM, fill=X)
+
+        license_btn = Button(
+            footer, text="🔑 Renew License",
+            command=open_license_window,
+            font=FONT_BODY_BOLD, bg=SIDEBAR, fg=WHITE,
+            activebackground=PRIMARY, activeforeground=WHITE,
+            relief=FLAT, bd=0, cursor="hand2", anchor="w", padx=20
+        )
+        license_btn.pack(fill=X, ipady=8)
 
         about_btn = Button(
             footer, text="ℹ️ About",
@@ -874,7 +884,7 @@ class Dashboard:
             anchor="w",
             padx=20
         )
-        btn.pack(fill=X, ipady=5)
+        btn.pack(fill=X, ipady=4)
 
         if not hasattr(self, "sidebar_buttons"):
             self.sidebar_buttons = {}

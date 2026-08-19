@@ -1006,9 +1006,9 @@ def show_purchase_details(event):
 
     details_win = Toplevel()
     details_win.title("Purchase Details")
-    details_win.iconbitmap("assets/ims.ico")
     size_and_center(details_win, width_ratio=0.7, height_ratio=1, resizable=True)
 
+    details_win.iconbitmap("assets/ims.ico")
 
     header_frame = LabelFrame(details_win, text="Purchase Information", padx=10, pady=10)
     header_frame.pack(fill="x", padx=10, pady=10)
@@ -1099,10 +1099,10 @@ def open_purchase_return_window():
 
     return_win = Toplevel()
     return_win.title("Process Purchase Return")
-    return_win.iconbitmap("assets/ims.ico")
     size_and_center(return_win, width_ratio=0.6, height_ratio=0.6)
 
     current_purchase_id = StringVar()
+    return_win.iconbitmap("assets/ims.ico")
 
     # ---------------- Search ----------------
     search_frame = LabelFrame(return_win, text="Find Purchase", padx=10, pady=10)
@@ -1217,13 +1217,13 @@ def open_return_history_window():
 
     win = Toplevel()
     win.title("Purchase Return History")
-    win.iconbitmap("assets/ims.ico")
     size_and_center(win, width_ratio=0.75, height_ratio=0.65)
 
     filter_frame = Frame(win)
     filter_frame.pack(fill="x", padx=10, pady=10)
 
     show_today_only = BooleanVar(value=False)
+    win.iconbitmap("assets/ims.ico")
 
     def refresh_list():
         clear_treeview(returns_tree)

@@ -23,9 +23,10 @@ def open_window():
     win.title("Role Management")
     win.configure(bg=BACKGROUND)
 
-    size_and_center(win, width_ratio=0.55, height_ratio=0.7, resizable=True)
+    size_and_center(win, width_ratio=0.55, height_ratio=1, resizable=True)
 
     apply_app_style()
+    win.iconbitmap("assets/ims.ico")
 
     selected_role_id = StringVar()
     selected_role_name = StringVar()

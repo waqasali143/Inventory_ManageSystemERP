@@ -31,10 +31,10 @@ def open_window():
     win.title("Backup & Restore")
     size_and_center(win, width_ratio=0.55, height_ratio=1, resizable=True)
 
-    win.iconbitmap("assets/ims.ico")
     win.configure(bg=BACKGROUND)
 
     apply_app_style()
+    win.iconbitmap("assets/ims.ico")
 
     # ---------------- Header ----------------
     header_frame = Frame(win, bg=PRIMARY, height=60)

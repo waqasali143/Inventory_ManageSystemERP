@@ -102,6 +102,8 @@ def open_window():
     size_and_center(win, width_ratio=0.65, height_ratio=0.7, resizable=True)
 
     apply_app_style()
+    win.iconbitmap("assets/ims.ico")
+
 
     # ---------------- Variables ----------------
     selected_id = StringVar()

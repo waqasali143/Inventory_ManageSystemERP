@@ -282,7 +282,9 @@ def open_supplier_purchase_history(selected_id, name, ntn, is_filer):
 
     win = Toplevel()
     win.title(f"Purchase History - {name.get()}")
-    size_and_center(win, width_ratio=0.8, height_ratio=1, resizable=True)
+    size_and_center(win, width_ratio=0.86, height_ratio=1, resizable=True)
+
+    win.iconbitmap("assets/ims.ico")
 
     apply_app_style()
 

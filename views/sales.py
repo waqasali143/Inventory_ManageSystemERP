@@ -638,7 +638,7 @@ def sales_history():
 
     history_win = Toplevel()
     history_win.title("Sales History")
-    size_and_center(history_win, width_ratio=0.9, height_ratio=0.75, resizable=True)
+    size_and_center(history_win, width_ratio=.95, height_ratio=.97, resizable=True)
 
     history_win.iconbitmap("assets/ims.ico")
     search_frame = LabelFrame(history_win, text="Search Sale", padx=10, pady=10)
@@ -721,13 +721,6 @@ def sales_history():
     bind_shortcuts(history_win, {
         "<Control-p>": print_selected_invoice,
     })
-# ==============================================================================
-
-    Label(search_frame, text="Sale No").grid(row=0, column=0, padx=5)
-    sale_search = StringVar()
-    Entry(search_frame, textvariable=sale_search, width=30).grid(row=0, column=1, padx=5)
-    
-    history_tree = None
 
 # ============================================================================
     def load_history(search_term=None, date_from=None, date_to=None):
@@ -760,6 +753,9 @@ def sales_history():
     scroll_y = Scrollbar(table_frame, orient=VERTICAL)
     scroll_y.pack(side=RIGHT, fill=Y)
 
+    scroll_x = Scrollbar(table_frame, orient=HORIZONTAL)
+    scroll_x.pack(side=BOTTOM, fill=X)
+
     history_tree = ttk.Treeview(
         table_frame,
         columns=(
@@ -768,9 +764,11 @@ def sales_history():
             "tax", "tax_amount", "net_total", "quantity", "returned_qty",
             "payment_status", "amount_paid", "balance_due"
         ),
-        yscrollcommand=scroll_y.set
+        yscrollcommand=scroll_y.set,
+        xscrollcommand=scroll_x.set
     )
     scroll_y.config(command=history_tree.yview)
+    scroll_x.config(command=history_tree.xview)
 
     history_tree.heading("id", text="ID")
     history_tree.heading("sale_no", text="Sale No")
@@ -913,18 +911,15 @@ def open_return_window():
 
     return_win = Toplevel()
     return_win.title("Process Sale Return")
-    return_win.iconbitmap("assets/ims.ico")
+
     size_and_center(return_win, width_ratio=0.6, height_ratio=0.6)
 
     current_sale_id = StringVar()
+    return_win.iconbitmap("assets/ims.ico")
 
     # ---------------- Search ----------------
     search_frame = LabelFrame(return_win, text="Find Sale", padx=10, pady=10)
     search_frame.pack(fill="x", padx=10, pady=10)
-
-    Label(search_frame, text="Sale No").grid(row=0, column=0, padx=5)
-    sale_no_search = StringVar()
-    Entry(search_frame, textvariable=sale_no_search, width=25).grid(row=0, column=1, padx=5)
 
     Button(
         search_frame, text="Load Items", width=14,
@@ -1026,13 +1021,13 @@ def open_sale_return_history_window():
 
     win = Toplevel()
     win.title("Sales Return History")
-    win.iconbitmap("assets/ims.ico")
     size_and_center(win, width_ratio=0.75, height_ratio=0.65)
 
     filter_frame = Frame(win)
     filter_frame.pack(fill="x", padx=10, pady=10)
 
     show_today_only = BooleanVar(value=False)
+    win.iconbitmap("assets/ims.ico")
 
     def refresh_list():
         for row in returns_tree.get_children():
